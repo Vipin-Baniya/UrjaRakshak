@@ -20,12 +20,8 @@ COPY app/ ./app/
 RUN useradd -m -u 1000 urjarakshak && chown -R urjarakshak:urjarakshak /app
 USER urjarakshak
 
-# Expose port
+# Railway will provide PORT dynamically
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health')"
-
-# Run application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run application (IMPORTANT: use shell form so $PORT expands)
+CMD uvicorn app.main:app --host 0.0.0.0 --port $PORT
