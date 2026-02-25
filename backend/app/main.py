@@ -110,8 +110,8 @@ app = FastAPI(
     ),
     version="2.0.0",
     lifespan=lifespan,
-    docs_url="/api/docs" if settings.DEBUG else None,  # Docs only in debug
-    redoc_url="/api/redoc" if settings.DEBUG else None,
+    docs_url="/api/docs",  # ← Always enabled
+    redoc_url="/api/redoc",  # ← Always enabled
     openapi_url="/api/openapi.json"
 )
 
