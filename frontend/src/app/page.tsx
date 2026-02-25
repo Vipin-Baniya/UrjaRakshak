@@ -21,12 +21,12 @@ export default function Home() {
               <Link 
                 href="/dashboard" 
                 className="bg-white text-primary-600 px-8 py-3 rounded-lg font-semibold hover:bg-primary-50 transition"
-              >
-                Launch Dashboard 
-              </Link>
-              <button onClick={() => router.push("/dashboard")}>
+              > <button onClick={() => router.push("/dashboard")}>
   Launch Dashboard
 </button>
+                Launch Dashboard 
+              </Link>
+              
               <a 
                 href={`${process.env.NEXT_PUBLIC_API_URL}/api/docs`}
                 target="_blank"
