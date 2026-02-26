@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-main: #070B14;
+  --bg-panel: #0E1625;
+  --accent-electric: #00F5C4;
+  --accent-neon: #3A8DFF;
+  --danger: #FF4D4F;
+  --text-primary: #E6F1FF;
+  --text-muted: #7C8DA6;
+}
+
+@layer base {
+  body {
+    @apply bg-bg-main text-text-primary;
+  }
+}
+
+/* AI Lab Energy Background */
+.energy-bg {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(0,245,196,0.08), transparent 40%),
+    radial-gradient(circle at 70% 60%, rgba(58,141,255,0.08), transparent 40%);
+  z-index: -1;
+}
+
+/* Glass AI Panel */
+.ai-panel {
+  background: rgba(14, 22, 37, 0.75);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(0,245,196,0.08);
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 0 40px rgba(0,245,196,0.04);
+}
+
+/* Platform-specific styles */
+body[data-platform="mac"] .ai-panel {
+  border-radius: 24px;
+}
+
+body[data-platform="windows"] .ai-panel {
+  border-radius: 8px;
+  border: 1px solid rgba(58,141,255,0.12);
+}
+
+body[data-platform="ios"] button {
+  height: 56px;
+  font-size: 18px;
+  border-radius: 28px;
+}
+
+body[data-platform="android"] button {
+  height: 52px;
+  font-size: 16px;
+  border-radius: 12px;
+}
+
+/* Code blocks */
+.code-block {
+  background: #0E1625;
+  border: 1px solid rgba(0,245,196,0.1);
+  border-radius: 14px;
+  padding: 16px;
+  font-family: 'Monaco', 'Consolas', monospace;
+}
+
+/* Status indicator */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.status-live {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Animated number */
+@keyframes number-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animated-number {
+  animation: number-up 0.5s ease-out;
+}
+
+/* Glow effects */
+.glow-electric {
+  box-shadow: 0 0 20px rgba(0,245,196,0.3);
+}
+
+.glow-neon {
+  box-shadow: 0 0 20px rgba(58,141,255,0.3);
+}
+
+/* Waveform animation */
+@keyframes wave {
+  0%, 100% { transform: scaleY(0.5); }
+  50% { transform: scaleY(1); }
+}
+
+.waveform-bar {
+  animation: wave 1.2s ease-in-out infinite;
+}
+
+.waveform-bar:nth-child(2) { animation-delay: 0.1s; }
+.waveform-bar:nth-child(3) { animation-delay: 0.2s; }
+.waveform-bar:nth-child(4) { animation-delay: 0.3s; }
+.waveform-bar:nth-child(5) { animation-delay: 0.4s; }
