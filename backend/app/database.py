@@ -54,7 +54,7 @@ def create_database_engine() -> AsyncEngine:
         engine_args["pool_recycle"] = 3600  # Recycle connections after 1 hour
         logger.info("Using QueuePool for production (size=20, overflow=10)")
     
-    return create_async_engine(database_url, **engine_args)
+    return create_async_engine(database_url,connect_args={"statement_cache_size": 0},**engine_args)
 
 
 # Create engine
