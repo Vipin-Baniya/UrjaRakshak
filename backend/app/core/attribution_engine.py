@@ -603,4 +603,4 @@ if __name__ == "__main__":
 class AttributionEngine(LossAttributionEngine):
     """Alias for v2 compatibility"""
     def __init__(self, conservative_mode: bool = True):
-        super().__init__(conservative_threshold=0.3 if conservative_mode else 0.5)
+        super().__init__(enable_conservative_mode=conservative_mode)
