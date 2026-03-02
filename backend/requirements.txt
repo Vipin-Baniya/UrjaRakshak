@@ -43,4 +43,5 @@ httpx==0.26.0
 # ── Dev Tools (remove in production) ─────────────────────────────────
 # black==23.12.1
 # mypy==1.8.0
+openai>=1.0.0
 openpyxl==3.1.2                # Excel file parsing for meter data upload
