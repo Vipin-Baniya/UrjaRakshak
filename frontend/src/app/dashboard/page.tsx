@@ -233,7 +233,7 @@ export default function Dashboard() {
         <div className="ai-layer" style={{ padding: 24 }}>
           <div className="section-label">AI Interpretation Layer</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <span style={{ fontFamily: 'var(--font-body)', fontSize: 15, fontWeight: 600 }}>Claude AI Analysis</span>
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: 15, fontWeight: 600 }}>OpenAI Analysis</span>
             <span className="chip chip-warn">Disabled</span>
           </div>
           <div style={{ background: 'var(--bg-base)', borderRadius: 'var(--r-md)', padding: '14px 18px', border: '1px solid var(--border-subtle)', marginBottom: 14 }}>
