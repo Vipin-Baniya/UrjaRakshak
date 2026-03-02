@@ -1,0 +1,64 @@
+GNU AFFERO GENERAL PUBLIC LICENSE
+Version 3, 19 November 2007
+
+Copyright (C) 2024 UrjaRakshak Foundation
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published
+by the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+================================================================================
+ETHICAL USE ADDENDUM
+================================================================================
+
+In addition to the terms of the AGPL v3, use of this software is subject to
+the following ethical constraints:
+
+1. PROHIBITED USES
+   This software SHALL NOT be used for:
+   - Personal surveillance or tracking of individuals
+   - Facial recognition or biometric identification
+   - Individual consumer profiling or behavior prediction
+   - Automated punishment or enforcement without human oversight
+   - Sale or monetization of personal data
+   - Any purpose that violates human dignity or privacy
+
+2. REQUIRED PRACTICES
+   Users of this software MUST:
+   - Maintain human-in-the-loop for all consequential decisions
+   - Operate with data minimization and aggregation at grid level
+   - Implement and respect the ethical charter (ETHICAL_CHARTER.md)
+   - Provide transparency about algorithmic decisions
+   - Enable audit trails for accountability
+
+3. DATA SOVEREIGNTY
+   - Raw data must not be transferred across borders without explicit consent
+   - Local data sovereignty must be respected
+   - Federated learning approaches should be used for cross-border intelligence
+
+4. ENFORCEMENT
+   Violation of these ethical constraints constitutes a material breach of the
+   license and terminates all rights granted under this license.
+
+5. REPORTING
+   Users must report any misuse or ethical violations to:
+   ethics@urjarakshak.org
+
+6. BINDING NATURE
+   This ethical addendum is legally binding and integral to the license.
+   It cannot be removed or modified without violating the license terms.
+
+================================================================================
+
+For the full AGPL v3 license text, see: https://www.gnu.org/licenses/agpl-3.0.txt
+
+For questions about ethical use, contact: legal@urjarakshak.org
