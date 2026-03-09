@@ -69,6 +69,24 @@ class Settings(BaseSettings):
     ENABLE_WEBSOCKETS: bool = True
     ENABLE_AI_ANALYSIS: bool = False  # Off by default until configured
     ENABLE_REAL_TIME_UPDATES: bool = True
+    # ── Multi-Tenancy ──────────────────────────────────────────────
+    ENABLE_MULTI_TENANT: bool = Field(default=True, env='ENABLE_MULTI_TENANT')
+    DEFAULT_ORG_PLAN: str = Field(default='free', env='DEFAULT_ORG_PLAN')
+
+    # ── Real-Time Streaming ────────────────────────────────────────
+    MAX_SSE_CONNECTIONS_PER_SUBSTATION: int = Field(default=50, env='MAX_SSE_CONNECTIONS')
+    STREAMING_HEARTBEAT_SECONDS: int = Field(default=30, env='STREAMING_HEARTBEAT_SECONDS')
+
+    # ── Drift Detection ────────────────────────────────────────────
+    ENABLE_AUTO_DRIFT_CHECK: bool = Field(default=True, env='ENABLE_AUTO_DRIFT_CHECK')
+    DRIFT_CHECK_INTERVAL_HOURS: int = Field(default=24, env='DRIFT_CHECK_INTERVAL_HOURS')
+    DRIFT_PSI_RETRAIN_THRESHOLD: float = Field(default=0.25, env='DRIFT_PSI_RETRAIN_THRESHOLD')
+
+    # ── Transformer Aging ──────────────────────────────────────────
+    ENABLE_AGING_ANALYSIS: bool = Field(default=True, env='ENABLE_AGING_ANALYSIS')
+    DEFAULT_AMBIENT_TEMP_C: float = Field(default=30.0, env='DEFAULT_AMBIENT_TEMP_C')
+    DEFAULT_TRANSFORMER_LIFE_YEARS: float = Field(default=30.0, env='DEFAULT_TRANSFORMER_LIFE_YEARS')
+
     
     # External Services (optional)
     CLOUDINARY_URL: Optional[str] = Field(None, env="CLOUDINARY_URL")
