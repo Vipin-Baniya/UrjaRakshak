@@ -32,6 +32,9 @@ from app.database import (
 # Physics engines
 from app.core.physics_engine import PhysicsEngine
 from app.core.attribution_engine import AttributionEngine
+from app.core.ai_interpretation_engine import init_ai_engine
+from app.core.physics_constrained_anomaly import init_constrained_engine
+from app.core.load_forecasting_engine import get_forecast_engine
 
 # ML engine
 from app.ml.anomaly_detection import anomaly_engine as ml_anomaly_engine
@@ -40,8 +43,8 @@ from app.ml.anomaly_detection import anomaly_engine as ml_anomaly_engine
 from app.middleware import RateLimitMiddleware, MetricsMiddleware, metrics
 
 # API routes
-from app.api.v1 import analysis, grid, upload
-from app.api.v1 import auth_routes
+from app.api.v1 import analysis, grid, upload, inspection, ai
+from app.api.v1 import auth_routes, stream, governance
 
 # DB models (import so they register with Base.metadata)
 from app.models import db_models  # noqa: F401
@@ -86,6 +89,32 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️  Anomaly engine init warning: {e}")
 
+    # Initialize AI interpretation engine
+    try:
+        ai_eng = init_ai_engine(
+            anthropic_key=settings.ANTHROPIC_API_KEY,
+            openai_key=settings.OPENAI_API_KEY,
+        )
+        logger.info(f"✅ AI Interpretation Engine: provider={ai_eng.preferred_provider} configured={ai_eng.is_configured}")
+    except Exception as e:
+        logger.warning(f"⚠️  AI engine init warning: {e}")
+
+    # Initialize physics-constrained anomaly engine
+    try:
+        constrained_eng = init_constrained_engine(ml_engine=ml_anomaly_engine)
+        app.state.constrained_anomaly_engine = constrained_eng
+        logger.info("✅ Physics-Constrained Anomaly Engine: active (3-gate: physics + z-score + IF)")
+    except Exception as e:
+        logger.warning(f"⚠️  Physics-constrained engine init warning: {e}")
+
+    # Initialize load forecasting engine
+    try:
+        forecast_eng = get_forecast_engine()
+        app.state.forecast_engine = forecast_eng
+        logger.info("✅ Load Forecasting Engine: active (Fourier + linear trend decomposition)")
+    except Exception as e:
+        logger.warning(f"⚠️  Forecast engine init warning: {e}")
+
     # Store in app state
     app.state.physics_engine = physics_engine
     app.state.attribution_engine = attribution_engine
@@ -111,7 +140,7 @@ app = FastAPI(
         "Physics-based Energy Integrity & Grid Loss Analysis System. "
         "Developer & Founder: Vipin Baniya."
     ),
-    version="2.1.0",
+    version="2.3.0",
     lifespan=lifespan,
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -135,10 +164,14 @@ app.add_middleware(RateLimitMiddleware, max_requests=60, window_seconds=60)
 app.add_middleware(MetricsMiddleware)
 
 # ── Routers ───────────────────────────────────────────────────────────────
-app.include_router(auth_routes.router, prefix="/api/v1/auth", tags=["Authentication"])
-app.include_router(analysis.router, prefix="/api/v1/analysis", tags=["Analysis"])
-app.include_router(grid.router, prefix="/api/v1/grid", tags=["Grid"])
-app.include_router(upload.router, prefix="/api/v1/upload", tags=["Upload"])
+app.include_router(auth_routes.router, prefix="/api/v1/auth",        tags=["Authentication"])
+app.include_router(analysis.router,   prefix="/api/v1/analysis",     tags=["Analysis"])
+app.include_router(grid.router,       prefix="/api/v1/grid",         tags=["Grid"])
+app.include_router(upload.router,     prefix="/api/v1/upload",       tags=["Upload"])
+app.include_router(inspection.router, prefix="/api/v1/inspections",  tags=["Inspections"])
+app.include_router(ai.router,         prefix="/api/v1/ai",           tags=["AI & GHI"])
+app.include_router(stream.router,     prefix="/api/v1/stream",       tags=["Real-Time Streaming"])
+app.include_router(governance.router, prefix="/api/v1/org",          tags=["Governance & Multi-Tenant"])
 
 
 # ── Core endpoints ────────────────────────────────────────────────────────
