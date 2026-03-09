@@ -29,6 +29,17 @@ export function CommandBar() {
     return () => clearInterval(id)
   }, [])
 
+  const nav = [
+    { href: '/',            label: 'Home' },
+    { href: '/dashboard',   label: 'Dashboard' },
+    { href: '/ghi',         label: 'GHI' },
+    { href: '/stream',      label: 'Live' },
+    { href: '/inspections', label: 'Inspections' },
+    { href: '/governance',  label: 'Governance' },
+    { href: '/upload',      label: 'Upload' },
+    { href: '/docs',        label: 'Docs' },
+  ]
+
   return (
     <header className="cmd-bar">
       <div className="cmd-bar-left">
@@ -43,10 +54,11 @@ export function CommandBar() {
         <div className="cmd-divider" />
 
         <nav className="cmd-nav">
-          <Link href="/" className={pathname === '/' ? 'active' : ''}>Home</Link>
-          <Link href="/dashboard" className={pathname === '/dashboard' ? 'active' : ''}>Dashboard</Link>
-          <Link href="/upload" className={pathname === '/upload' ? 'active' : ''}>Upload</Link>
-          <Link href="/docs" className={pathname === '/docs' ? 'active' : ''}>Docs</Link>
+          {nav.map(n => (
+            <Link key={n.href} href={n.href} className={pathname === n.href ? 'active' : ''}>
+              {n.label}
+            </Link>
+          ))}
         </nav>
       </div>
 
