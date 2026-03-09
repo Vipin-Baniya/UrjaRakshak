@@ -1,6 +1,6 @@
 # 🕊️ UrjaRakshak Ethical Charter
 
-**Version 1.0.0 | Effective Date: February 15, 2024**
+**Version 1.0.0 | Effective Date: February 15, 2025**
 
 ## Preamble
 
@@ -377,7 +377,7 @@ We choose humanity over optimization.
 
 **Signed:**  
 The Founding Board of UrjaRakshak Foundation  
-February 15, 2024
+February 15, 2025
 
 ---
 
