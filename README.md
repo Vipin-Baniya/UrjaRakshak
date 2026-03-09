@@ -140,4 +140,4 @@ See [`ETHICAL_CHARTER.md`](./ETHICAL_CHARTER.md) for details.
 ---
 
 **Developer & Founder:** Vipin Baniya  
-**© 2025 UrjaRakshak. All rights reserved.**
+**© 2026 UrjaRakshak. All rights reserved.**
