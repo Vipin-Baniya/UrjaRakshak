@@ -2,10 +2,11 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { api, DashboardData } from '@/lib/api'
+import { api, DashboardData, ghiApi, GHIDashboard } from '@/lib/api'
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null)
+  const [ghiData, setGhiData] = useState<GHIDashboard | null>(null)
   const [health, setHealth] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -24,12 +25,14 @@ export default function Dashboard() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [dashData, healthData] = await Promise.all([
+      const [dashData, healthData, ghiDashData] = await Promise.all([
         api.getDashboard(),
         api.health().catch(() => null),
+        ghiApi.getDashboard().catch(() => null),
       ])
       setData(dashData)
       setHealth(healthData)
+      setGhiData(ghiDashData)
       setError(null)
       setLastFetched(new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC')
     } catch (e: any) {
@@ -233,7 +236,7 @@ export default function Dashboard() {
         <div className="ai-layer" style={{ padding: 24 }}>
           <div className="section-label">AI Interpretation Layer</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <span style={{ fontFamily: 'var(--font-body)', fontSize: 15, fontWeight: 600 }}>OpenAI Analysis</span>
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: 15, fontWeight: 600 }}>Claude AI Analysis</span>
             <span className="chip chip-warn">Disabled</span>
           </div>
           <div style={{ background: 'var(--bg-base)', borderRadius: 'var(--r-md)', padding: '14px 18px', border: '1px solid var(--border-subtle)', marginBottom: 14 }}>
@@ -280,6 +283,50 @@ export default function Dashboard() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* GHI SUMMARY ROW */}
+      {ghiData && (
+        <div className="afu" style={{ animationDelay: '0.55s', opacity: 0, marginBottom: 16 }}>
+          <div className="section-label">Grid Health Intelligence</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 14 }}>
+            <div className="panel" style={{ padding: '18px 24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div className="mono-label" style={{ color: 'var(--blue)', marginBottom: 8 }}>Fleet GHI Overview</div>
+                  {ghiData.avg_ghi_all_time !== null ? (
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 44, fontWeight: 300, letterSpacing: '-0.03em', color: ghiData.avg_ghi_all_time >= 70 ? 'var(--teal)' : ghiData.avg_ghi_all_time >= 50 ? 'var(--warning)' : 'var(--danger)' }}>
+                      {ghiData.avg_ghi_all_time}
+                    </div>
+                  ) : <div style={{ fontSize: 20, color: 'var(--text-dim)', marginTop: 8 }}>—</div>}
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)', marginTop: 4 }}>Average GHI all time</div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {Object.entries(ghiData.by_classification).map(([cls, cnt]) => {
+                    const colors: Record<string, string> = { HEALTHY: 'var(--teal)', STABLE: 'var(--blue)', DEGRADED: 'var(--warning)', CRITICAL: '#FF6B35', SEVERE: 'var(--danger)' }
+                    return (
+                      <div key={cls} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: colors[cls] ?? 'var(--text-dim)', flexShrink: 0 }} />
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-dim)', width: 70 }}>{cls}</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: colors[cls] ?? 'var(--text-secondary)' }}>{cnt}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+              <div style={{ marginTop: 14 }}>
+                <Link href="/ghi" className="btn-secondary" style={{ padding: '7px 14px', fontSize: 10 }}>Full GHI Analysis →</Link>
+              </div>
+            </div>
+            <StatCard label="GHI Snapshots" value={ghiData.total_ghi_snapshots.toString()} sub="total computed" />
+            <StatCard label="Open Inspections" value={ghiData.open_inspections.toString()} sub={`${ghiData.critical_open} critical/high`} color={ghiData.critical_open > 0 ? 'var(--danger)' : undefined} />
+            <StatCard label="AI Interpretations" value={ghiData.total_ai_interpretations.toString()} sub={`${ghiData.live_ai_interpretations} live LLM`} />
+            <div className="panel" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div className="metric-lbl">Inspection Workflow</div>
+              <Link href="/inspections" className="btn-primary" style={{ marginTop: 12, justifyContent: 'center', fontSize: 10 }}>View Tickets →</Link>
+            </div>
+          </div>
         </div>
       )}
 
