@@ -1,6 +1,6 @@
 # 🕊️ UrjaRakshak Ethical Charter
 
-**Version 1.0.0 | Effective Date: February 15, 2025**
+**Version 1.0.0 | Effective Date: February 15, 2026**
 
 ## Preamble
 
@@ -348,16 +348,16 @@ Not when:
 
 ---
 
-## 📞 Contact & Governance
+## 📞 Contact & Governance ( Not Avaiable as of now )
 
-**UrjaRakshak Foundation**  
+**UrjaRakshak Foundation** 
 Ethics Board: ethics@urjarakshak.org  
 Whistleblower: secure@urjarakshak.org  
 Public Comment: public@urjarakshak.org  
 
 **Emergency Ethics Hotline**  
 Available 24/7 for charter violations  
-+1-XXX-XXX-XXXX (encrypted line)
++91-XXXXXXXXXX (encrypted line)
 
 ---
 
@@ -377,7 +377,7 @@ We choose humanity over optimization.
 
 **Signed:**  
 The Founding Board of UrjaRakshak Foundation  
-February 15, 2025
+February 15, 2026
 
 ---
 
@@ -395,4 +395,4 @@ February 15, 2025
 *Version History*  
 - v1.0.0 (2024-02-15): Initial charter  
 
-*Next Review Date*: February 15, 2025
+*Next Review Date*: September 15, 2026
