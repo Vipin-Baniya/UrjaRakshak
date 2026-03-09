@@ -1,10 +1,10 @@
 """
-UrjaRakshak — Analysis API Endpoints (v2 — DB Persistent)
-==========================================================
-POST /api/v1/analysis/validate       — Physics validation (saves to DB)
+UrjaRakshak — Analysis API Endpoints (v2.2 — GHI + AI Integrated)
+==================================================================
+POST /api/v1/analysis/validate       — Physics validation + GHI + AI (saves to DB)
 POST /api/v1/analysis/anomaly/detect — ML anomaly detection
 GET  /api/v1/analysis/               — List analyses (paginated)
-GET  /api/v1/analysis/{id}           — Get single analysis
+GET  /api/v1/analysis/{id}           — Get single analysis with GHI + AI data
 GET  /api/v1/analysis/stats/summary  — Aggregated statistics
 
 Author: Vipin Baniya
@@ -22,8 +22,12 @@ from sqlalchemy import select, func, desc
 from app.core.physics_engine import GridComponent, PhysicsEngine
 from app.ml.anomaly_detection import AnomalyFeatures
 from app.database import get_db
-from app.models.db_models import Analysis, GridSection, AnomalyResult as DBAnomaly, User
+from app.models.db_models import (
+    Analysis, GridSection, AnomalyResult as DBAnomaly, User,
+    GridHealthSnapshot, AIInterpretation, Inspection,
+)
 from app.auth import get_current_active_user
+from app.services.ghi_service import run_full_ghi_pipeline
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -82,7 +86,15 @@ async def validate_grid_section(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Dict[str, Any]:
-    """Physics-based energy conservation validation — result saved to DB."""
+    """
+    Physics-based energy conservation validation.
+    After physics computation, automatically runs:
+      → GHI engine (Grid Health Index)
+      → Risk classification (inspection priority)
+      → AI interpretation layer
+      → Auto-creates inspection ticket if warranted
+    All results saved to DB.
+    """
     physics_engine: PhysicsEngine = fastapi_request.app.state.physics_engine
 
     try:
@@ -111,7 +123,7 @@ async def validate_grid_section(
     )
     result_dict = result.to_dict()
 
-    # Persist to DB
+    # Persist physics analysis to DB
     analysis_id = None
     try:
         section = await get_or_create_grid_section(request.substation_id, db)
@@ -140,16 +152,48 @@ async def validate_grid_section(
     except Exception as db_err:
         logger.warning(f"Failed to persist analysis: {db_err}")
 
-    return {
+    # Run full GHI + Risk + AI pipeline (non-blocking on failure)
+    ghi_pipeline_result = None
+    if analysis_id:
+        try:
+            ghi_pipeline_result = await run_full_ghi_pipeline(
+                analysis_id=analysis_id,
+                substation_id=request.substation_id,
+                residual_pct=result.residual_percentage or 0.0,
+                confidence=result.confidence_score,
+                balance_status=result.balance_status.value,
+                measurement_quality=result.measurement_quality,
+                input_mwh=request.input_energy_mwh,
+                output_mwh=request.output_energy_mwh,
+                expected_loss_mwh=result.expected_technical_loss_mwh,
+                actual_loss_mwh=result.actual_loss_mwh,
+                db=db,
+                created_by=current_user.id,
+                auto_create_inspection=True,
+            )
+        except Exception as ghi_err:
+            logger.warning(f"GHI pipeline warning: {ghi_err}")
+
+    response = {
         "analysis_id": analysis_id,
         "substation_id": request.substation_id,
         "analysis": result_dict,
         "metadata": {
-            "engine": "Physics Truth Engine v2.0",
+            "engine": "Physics Truth Engine v2.1",
             "methodology": "First-principles thermodynamics",
             "persisted": analysis_id is not None,
         },
     }
+
+    if ghi_pipeline_result:
+        response["ghi"] = ghi_pipeline_result["ghi"]
+        response["risk"] = ghi_pipeline_result["risk"]
+        response["ai_interpretation"] = ghi_pipeline_result["ai_interpretation"]
+        response["inspection_auto_created"] = ghi_pipeline_result["inspection_auto_created"]
+        response["inspection_id"] = ghi_pipeline_result["inspection_id"]
+        response["ai_provider"] = ghi_pipeline_result["ai_provider"]
+
+    return response
 
 
 @router.post("/anomaly/detect")
@@ -233,6 +277,21 @@ async def get_stats_summary(
     high_risk = [{"substation": r[0], "avg_residual_pct": round(float(r[1]), 2)} for r in high_risk_rows]
     users = (await db.execute(select(func.count(User.id)))).scalar() or 0
 
+    # GHI stats
+    avg_ghi = (await db.execute(select(func.avg(GridHealthSnapshot.ghi_score)))).scalar()
+    latest_ghi = (await db.execute(
+        select(GridHealthSnapshot).order_by(desc(GridHealthSnapshot.created_at)).limit(1)
+    )).scalar_one_or_none()
+    open_inspections = (await db.execute(
+        select(func.count(Inspection.id)).where(Inspection.status == "OPEN")
+    )).scalar() or 0
+    critical_inspections = (await db.execute(
+        select(func.count(Inspection.id)).where(
+            Inspection.status.in_(["OPEN", "IN_PROGRESS"]),
+            Inspection.priority == "CRITICAL"
+        )
+    )).scalar() or 0
+
     return {
         "summary": {
             "total_analyses": total,
@@ -242,6 +301,15 @@ async def get_stats_summary(
             "anomalies_flagged": flagged,
             "anomaly_flag_rate_pct": round(flagged / anomaly_total * 100, 1) if anomaly_total > 0 else 0,
             "registered_users": users,
+        },
+        "ghi": {
+            "avg_ghi": round(float(avg_ghi), 2) if avg_ghi else None,
+            "latest_ghi": latest_ghi.ghi_score if latest_ghi else None,
+            "latest_classification": latest_ghi.classification if latest_ghi else None,
+        },
+        "inspections": {
+            "open": open_inspections,
+            "critical_active": critical_inspections,
         },
         "by_status": by_status,
         "high_risk_substations": high_risk,
@@ -285,12 +353,34 @@ async def get_analysis(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Dict[str, Any]:
-    """Get single analysis by ID with full physics result."""
+    """Get single analysis by ID with full physics result + GHI + AI interpretation."""
     result = await db.execute(select(Analysis).where(Analysis.id == analysis_id))
     analysis = result.scalar_one_or_none()
     if not analysis:
         raise HTTPException(status_code=404, detail="Analysis not found")
-    return {
+
+    # Load associated GHI snapshot
+    ghi_snap = (await db.execute(
+        select(GridHealthSnapshot)
+        .where(GridHealthSnapshot.analysis_id == analysis_id)
+        .order_by(desc(GridHealthSnapshot.created_at)).limit(1)
+    )).scalar_one_or_none()
+
+    # Load associated AI interpretation
+    ai_interp = (await db.execute(
+        select(AIInterpretation)
+        .where(AIInterpretation.analysis_id == analysis_id)
+        .order_by(desc(AIInterpretation.created_at)).limit(1)
+    )).scalar_one_or_none()
+
+    # Load associated inspection
+    inspection = (await db.execute(
+        select(Inspection)
+        .where(Inspection.analysis_id == analysis_id)
+        .order_by(desc(Inspection.created_at)).limit(1)
+    )).scalar_one_or_none()
+
+    response: Dict[str, Any] = {
         "id": analysis.id, "substation_id": analysis.substation_id,
         "input_mwh": analysis.input_energy_mwh, "output_mwh": analysis.output_energy_mwh,
         "time_window_hours": analysis.time_window_hours,
@@ -301,3 +391,39 @@ async def get_analysis(
         "physics_result": analysis.physics_result_json,
         "created_at": analysis.created_at.isoformat() if analysis.created_at else None,
     }
+
+    if ghi_snap:
+        response["ghi"] = {
+            "ghi_score": ghi_snap.ghi_score,
+            "classification": ghi_snap.classification,
+            "action_required": ghi_snap.action_required,
+            "interpretation": ghi_snap.interpretation,
+            "components": {"PBS": ghi_snap.pbs, "ASS": ghi_snap.ass, "CS": ghi_snap.cs,
+                           "TSS": ghi_snap.tss, "DIS": ghi_snap.dis},
+            "inspection_priority": ghi_snap.inspection_priority,
+            "urgency": ghi_snap.urgency,
+        }
+
+    if ai_interp:
+        response["ai_interpretation"] = {
+            "risk_level": ai_interp.risk_level,
+            "inspection_priority": ai_interp.inspection_priority,
+            "primary_infrastructure_hypothesis": ai_interp.primary_infrastructure_hypothesis,
+            "recommended_actions": ai_interp.recommended_actions,
+            "confidence_commentary": ai_interp.confidence_commentary,
+            "trend_assessment": ai_interp.trend_assessment,
+            "estimated_investigation_scope": ai_interp.estimated_investigation_scope,
+            "model_name": ai_interp.model_name,
+            "token_usage": ai_interp.token_usage,
+        }
+
+    if inspection:
+        response["inspection"] = {
+            "id": inspection.id,
+            "priority": inspection.priority,
+            "status": inspection.status,
+            "urgency": inspection.urgency,
+            "description": inspection.description,
+        }
+
+    return response
