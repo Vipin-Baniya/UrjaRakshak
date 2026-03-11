@@ -33,9 +33,20 @@ export default function GovernancePage() {
   const [orgForm, setOrgForm]       = useState({ slug: '', name: '', plan: 'free' })
   const [orgResult, setOrgResult]   = useState<any>(null)
   const [myOrgs, setMyOrgs]         = useState<any[]>([])
+  const [tabError, setTabError]     = useState<string | null>(null)
+
+  function handleFetchError(e: any, context: string) {
+    const msg = (e?.message || String(e))
+    setTabError(
+      msg.includes('Authentication') || msg.includes('401')
+        ? `Session expired — please log in again via the Upload page. (${context})`
+        : `${context}: ${msg}`
+    )
+  }
 
   const runDrift = useCallback(async () => {
     setLoading(true)
+    setTabError(null)
     try {
       const [r, h] = await Promise.all([
         governanceApi.checkDrift(),
@@ -43,18 +54,20 @@ export default function GovernancePage() {
       ])
       setDrift(r)
       setDriftHistory(h.history)
-    } catch (_) {}
+    } catch (e: any) { handleFetchError(e, 'Drift check') }
     setLoading(false)
   }, [])
 
   const loadFleet = useCallback(async () => {
+    setTabError(null)
     try {
       const f = await governanceApi.getFleetAging()
       setFleet(f)
-    } catch (_) {}
+    } catch (e: any) { handleFetchError(e, 'Fleet aging') }
   }, [])
 
   const loadAudit = useCallback(async () => {
+    setTabError(null)
     try {
       const [log, chain] = await Promise.all([
         governanceApi.getAuditLog(50),
@@ -62,14 +75,15 @@ export default function GovernancePage() {
       ])
       setAuditLog(log.entries)
       setChainOk(chain?.verified ?? null)
-    } catch (_) {}
+    } catch (e: any) { handleFetchError(e, 'Audit log') }
   }, [])
 
   const loadOrgs = useCallback(async () => {
+    setTabError(null)
     try {
       const r = await governanceApi.listMyOrgs()
       setMyOrgs(r.organizations)
-    } catch (_) {}
+    } catch (e: any) { handleFetchError(e, 'Organizations') }
   }, [])
 
   useEffect(() => {
@@ -112,6 +126,13 @@ export default function GovernancePage() {
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '48px 40px' }}>
+
+      {/* Auth / Fetch Error Banner */}
+      {tabError && (
+        <div style={{ marginBottom: 24, padding: '12px 16px', background: 'rgba(255,77,79,0.08)', border: '1px solid rgba(255,77,79,0.25)', borderRadius: 'var(--r-sm)', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--danger)' }}>
+          ⚠️ {tabError}
+        </div>
+      )}
 
       {/* Header */}
       <div className="afu afu-1" style={{ marginBottom: 36 }}>
