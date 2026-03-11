@@ -22,7 +22,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 import logging
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -177,17 +177,29 @@ async def create_user(user_data: UserCreate, db: AsyncSession) -> User:
 
 async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    token: Optional[str] = Query(default=None, description="JWT token (for SSE / EventSource which cannot set headers)"),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """FastAPI dependency — extracts and validates JWT, returns User"""
-    if credentials is None:
+    """FastAPI dependency — extracts and validates JWT, returns User.
+
+    Accepts token from two sources (in priority order):
+      1. Authorization: Bearer <token>  (standard — all REST calls)
+      2. ?token=<token> query param     (SSE fallback — EventSource cannot set headers)
+    """
+    raw_token: Optional[str] = None
+    if credentials is not None:
+        raw_token = credentials.credentials
+    elif token is not None:
+        raw_token = token
+
+    if raw_token is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    token_data = decode_token(credentials.credentials)
+    token_data = decode_token(raw_token)
     user = await get_user_by_id(token_data.user_id, db)
 
     if not user:
