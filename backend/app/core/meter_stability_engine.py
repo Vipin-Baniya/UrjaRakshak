@@ -303,7 +303,7 @@ async def get_substation_stability_summary(
                 "meter_id":        r.meter_id,
                 "stability_score": r.stability_score,
                 "trend_direction": r.trend_direction,
-                "anomaly_rate":    r.anomaly_rate_30d,
+                "anomaly_rate_30d": r.anomaly_rate_30d,
                 "rolling_mean_kwh": r.rolling_mean_kwh,
                 "last_reading_kwh": r.last_reading_kwh,
                 "last_reading_ts":  r.last_reading_ts.isoformat() if r.last_reading_ts else None,
