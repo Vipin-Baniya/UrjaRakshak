@@ -37,7 +37,11 @@ export default function StreamPage() {
     try {
       const s = await streamApi.getSubstationStability(sub)
       setStability(s)
-    } catch (_) {}
+    } catch (e: any) {
+      if ((e?.message || '').includes('Authentication') || (e?.message || '').includes('401')) {
+        setSseError('Session expired — please log in again via the Upload page.')
+      }
+    }
   }, [])
 
   // ── Load recent historical events (REST fallback) ──────────────────────
@@ -47,7 +51,11 @@ export default function StreamPage() {
       setEvents(r.events.slice().reverse())
       setTotalCount(r.count)
       setAnomalyCount(r.events.filter(e => e.is_anomaly).length)
-    } catch (_) {}
+    } catch (e: any) {
+      if ((e?.message || '').includes('Authentication') || (e?.message || '').includes('401')) {
+        setSseError('Session expired — please log in again via the Upload page.')
+      }
+    }
   }, [])
 
   // ── Connect SSE ────────────────────────────────────────────────────────
@@ -83,12 +91,13 @@ export default function StreamPage() {
         })
         setTotalCount(n => n + 1)
         if (data.is_anomaly) setAnomalyCount(n => n + 1)
-      } catch (_) {}
+      } catch (_) { /* ignore malformed SSE JSON frames */ }
     }
 
-    es.onerror = () => {
+    es.onerror = (ev) => {
       setConnected(false)
-      setSseError('Connection lost. Showing recent historical data.')
+      // EventSource fires onerror on 401 too — show auth hint
+      setSseError('Connection failed. If this persists, your session may have expired — log in again via the Upload page.')
     }
   }, [])
 
