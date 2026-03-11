@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { CommandBar } from '@/components/ui/CommandBar'
 import { Footer } from '@/components/ui/Footer'
+import { Analytics } from '@vercel/analytics/next'
 
 export const metadata: Metadata = {
   title: 'UrjaRakshak — Physics-Based Grid Intelligence',
@@ -23,6 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </main>
           <Footer />
         </div>
+        <Analytics />
       </body>
     </html>
   )
