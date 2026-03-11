@@ -36,6 +36,8 @@ export default function UploadPage() {
     try {
       const res = await api.login(email, password)
       localStorage.setItem('urjarakshak_token', res.access_token)
+      localStorage.setItem('urjarakshak_role', res.role || 'viewer')
+      localStorage.setItem('urjarakshak_user_id', res.user_id || '')
       setIsAuthed(true)
       setStage('idle')
     } catch (e: any) {
