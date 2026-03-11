@@ -39,9 +39,11 @@ export default function InspectionsPage() {
   const [resolution, setResolution] = useState('')
   const [newStatus, setNewStatus] = useState('')
   const [updateMsg, setUpdateMsg] = useState('')
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
+    setFetchError(null)
     try {
       const [listRes, statsRes] = await Promise.all([
         inspectionApi.list({
@@ -54,7 +56,14 @@ export default function InspectionsPage() {
       setItems(listRes.items)
       setTotal(listRes.total)
       setStats(statsRes)
-    } catch (_e) {}
+    } catch (e: any) {
+      const msg = e.message || 'Failed to load inspections'
+      setFetchError(
+        msg.includes('Authentication') || msg.includes('401')
+          ? 'Session expired — please log in again via the Upload page.'
+          : msg
+      )
+    }
     setLoading(false)
   }, [statusFilter, priorityFilter])
 
@@ -91,6 +100,13 @@ export default function InspectionsPage() {
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '48px 40px' }}>
+
+      {/* Auth / Fetch Error Banner */}
+      {fetchError && (
+        <div style={{ marginBottom: 24, padding: '12px 16px', background: 'rgba(255,77,79,0.08)', border: '1px solid rgba(255,77,79,0.25)', borderRadius: 'var(--r-sm)', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--danger)' }}>
+          ⚠️ {fetchError}
+        </div>
+      )}
 
       {/* Header */}
       <div className="afu afu-1" style={{ marginBottom: 36 }}>
