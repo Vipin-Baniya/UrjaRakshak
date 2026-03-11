@@ -653,7 +653,7 @@ class TransformerAgingRecord(Base):
     load_factor         = Column(Float, nullable=True)
 
     # Aging outputs
-    thermal_aging_factor = Column(Float, nullable=True)         # V = exp((15000/383 - 15000/(Θh+273)))
+    thermal_aging_factor = Column(Float, nullable=True)         # V = exp(15000/371 - 15000/(Θh+273)), V=1.0 at 98°C
     life_consumed_pct    = Column(Float, nullable=True)         # cumulative since install
     estimated_rul_years  = Column(Float, nullable=True)         # remaining useful life
     failure_probability  = Column(Float, nullable=True)         # 0–1 over next 12 months
