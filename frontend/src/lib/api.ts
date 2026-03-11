@@ -12,6 +12,14 @@ async function fetcher<T>(path: string, init?: RequestInit): Promise<T> {
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
+    // Auto-clear expired/invalid token so user sees login prompt on next attempt
+    if (res.status === 401 && typeof window !== 'undefined') {
+      const isAuthEndpoint = path.includes('/auth/login') || path.includes('/auth/register')
+      if (!isAuthEndpoint) {
+        localStorage.removeItem('urjarakshak_token')
+        localStorage.removeItem('urjarakshak_role')
+      }
+    }
     throw new Error(body?.detail || `HTTP ${res.status}`)
   }
   return res.json()
@@ -41,7 +49,7 @@ export const api = {
 
   // ── Auth ─────────────────────────────────────────────────────────────
   login: (email: string, password: string) =>
-    fetcher<{ access_token: string; token_type: string }>('/api/v1/auth/login', {
+    fetcher<{ access_token: string; token_type: string; expires_in: number; role: string; user_id: string }>('/api/v1/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
