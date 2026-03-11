@@ -7,7 +7,7 @@ Fixed Issues:
 3. Proper validation and error handling
 """
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, field_validator, ValidationError
 from typing import List, Optional
 from functools import lru_cache
@@ -120,12 +120,29 @@ class Settings(BaseSettings):
         if not v.startswith(("postgresql://", "postgresql+asyncpg://")):
             raise ValueError("DATABASE_URL must be a PostgreSQL connection string")
         return v
-    
+
+    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def parse_allowed_origins(cls, v):
+        """Parse ALLOWED_ORIGINS from comma-separated string or JSON array.
+
+        Supports both:
+          ALLOWED_ORIGINS=http://localhost:3000,https://myapp.vercel.app
+          ALLOWED_ORIGINS=["http://localhost:3000","https://myapp.vercel.app"]
+        """
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("["):
+                import json
+                return json.loads(v)
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
+
     @property
     def is_production(self) -> bool:
         """Check if running in production"""
         return self.ENVIRONMENT == "production"
-    
+
     @property
     def is_development(self) -> bool:
         """Check if running in development"""
@@ -139,13 +156,16 @@ class Settings(BaseSettings):
             self.OPENAI_API_KEY or 
             self.HUGGINGFACE_TOKEN
         )
-    
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
-        # Parse list from comma-separated string
-        json_loads = lambda v: [x.strip() for x in v.split(",")] if isinstance(v, str) else v
+
+    # pydantic-settings v2: use SettingsConfigDict instead of inner Config class
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        # pydantic-settings v2 natively handles JSON arrays for List fields:
+        #   ALLOWED_ORIGINS='["http://localhost:3000","https://app.example.com"]'
+        # Comma-separated strings are handled by the validator below.
+    )
 
 
 @lru_cache()
