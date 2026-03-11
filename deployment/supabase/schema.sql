@@ -6,8 +6,10 @@ CREATE TABLE IF NOT EXISTS users (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email           VARCHAR(255) UNIQUE NOT NULL,
     hashed_password VARCHAR(255) NOT NULL,
+    full_name       VARCHAR(255),
     role            VARCHAR(50)  NOT NULL DEFAULT 'viewer',  -- admin|analyst|viewer
     is_active       BOOLEAN      NOT NULL DEFAULT true,
+    is_verified     BOOLEAN      NOT NULL DEFAULT false,
     last_login      TIMESTAMP,
     created_at      TIMESTAMP    NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMP    NOT NULL DEFAULT NOW()
@@ -41,6 +43,7 @@ CREATE TABLE IF NOT EXISTS components (
     length_km           DECIMAL(10,3),
     voltage_kv          DECIMAL(8,2),
     load_factor         DECIMAL(5,4),
+    status              VARCHAR(50)  NOT NULL DEFAULT 'active',
     metadata_json       JSONB,
     created_at          TIMESTAMP NOT NULL DEFAULT NOW(),
     UNIQUE(grid_section_id, component_id)
@@ -100,7 +103,7 @@ CREATE TABLE IF NOT EXISTS model_versions (
     training_score_mean DECIMAL(8,6),
     training_score_std  DECIMAL(8,6),
     metadata_json       JSONB,
-    is_active           BOOLEAN NOT NULL DEFAULT false,
+    is_active           BOOLEAN NOT NULL DEFAULT true,
     trained_at          TIMESTAMP,
     deployed_at         TIMESTAMP,
     created_at          TIMESTAMP NOT NULL DEFAULT NOW()
@@ -386,6 +389,7 @@ CREATE TABLE IF NOT EXISTS meter_stability_scores (
 CREATE INDEX IF NOT EXISTS idx_mstab_meter_id   ON meter_stability_scores(meter_id);
 CREATE INDEX IF NOT EXISTS idx_mstab_substation ON meter_stability_scores(substation_id);
 CREATE INDEX IF NOT EXISTS idx_mstab_score      ON meter_stability_scores(stability_score);
+CREATE INDEX IF NOT EXISTS idx_mstab_computed_at ON meter_stability_scores(computed_at DESC);
 ALTER TABLE meter_stability_scores ENABLE ROW LEVEL SECURITY;
 CREATE POLICY IF NOT EXISTS "Service role mstab" ON meter_stability_scores FOR ALL USING (true);
 
@@ -444,8 +448,10 @@ CREATE TABLE IF NOT EXISTS transformer_aging_records (
     UNIQUE(substation_id, transformer_tag)
 );
 CREATE INDEX IF NOT EXISTS idx_txaging_substation   ON transformer_aging_records(substation_id);
+CREATE INDEX IF NOT EXISTS idx_txaging_tag          ON transformer_aging_records(transformer_tag);
 CREATE INDEX IF NOT EXISTS idx_txaging_condition    ON transformer_aging_records(condition_class);
 CREATE INDEX IF NOT EXISTS idx_txaging_failure_prob ON transformer_aging_records(failure_probability DESC);
+CREATE INDEX IF NOT EXISTS idx_txaging_computed     ON transformer_aging_records(computed_at DESC);
 ALTER TABLE transformer_aging_records ENABLE ROW LEVEL SECURITY;
 CREATE POLICY IF NOT EXISTS "Service role txaging" ON transformer_aging_records FOR ALL USING (true);
 
@@ -468,205 +474,10 @@ CREATE TABLE IF NOT EXISTS audit_ledger (
     recorded_at   TIMESTAMP NOT NULL DEFAULT NOW(),
     ip_address    VARCHAR(45)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_audit_sequence    ON audit_ledger(sequence_no);
 CREATE INDEX IF NOT EXISTS idx_audit_recorded_at ON audit_ledger(recorded_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_event_type  ON audit_ledger(event_type);
 CREATE INDEX IF NOT EXISTS idx_audit_org_id      ON audit_ledger(org_id);
-CREATE INDEX IF NOT EXISTS idx_audit_sequence    ON audit_ledger(sequence_no);
 ALTER TABLE audit_ledger ENABLE ROW LEVEL SECURITY;
 CREATE POLICY IF NOT EXISTS "Service role audit" ON audit_ledger FOR ALL USING (true);
 
--- ═══════════════════════════════════════════════════════════════════════════
--- v2.3 — Multi-Tenant, Streaming, Drift, Transformer Aging, Audit Ledger
--- ═══════════════════════════════════════════════════════════════════════════
-
--- ── Organizations (Multi-Tenant) ──────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS organizations (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    slug            VARCHAR(80) UNIQUE NOT NULL,
-    name            VARCHAR(255) NOT NULL,
-    plan            VARCHAR(30) NOT NULL DEFAULT 'free',
-    api_key_hash    VARCHAR(64) UNIQUE NOT NULL,
-    api_key_prefix  VARCHAR(12) NOT NULL,
-    analyses_today  INTEGER NOT NULL DEFAULT 0,
-    quota_reset_at  TIMESTAMP NOT NULL DEFAULT NOW(),
-    is_active       BOOLEAN NOT NULL DEFAULT true,
-    created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMP NOT NULL DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_org_slug       ON organizations(slug);
-CREATE INDEX IF NOT EXISTS idx_org_key_hash   ON organizations(api_key_hash);
-CREATE INDEX IF NOT EXISTS idx_org_plan       ON organizations(plan);
-
-ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "Service org access" ON organizations FOR ALL USING (true);
-
--- ── Organization Members ───────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS organization_members (
-    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id     UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role       VARCHAR(30) NOT NULL DEFAULT 'member',
-    joined_at  TIMESTAMP NOT NULL DEFAULT NOW(),
-    UNIQUE(org_id, user_id)
-);
-CREATE INDEX IF NOT EXISTS idx_orgmember_org   ON organization_members(org_id);
-CREATE INDEX IF NOT EXISTS idx_orgmember_user  ON organization_members(user_id);
-
-ALTER TABLE organization_members ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "Service orgmember access" ON organization_members FOR ALL USING (true);
-
--- ── Live Meter Events (Streaming) ──────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS live_meter_events (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    meter_id        VARCHAR(100) NOT NULL,
-    substation_id   VARCHAR(100) NOT NULL,
-    org_id          UUID REFERENCES organizations(id) ON DELETE SET NULL,
-    energy_kwh      DECIMAL(12,4) NOT NULL,
-    voltage_v       DECIMAL(10,3),
-    current_a       DECIMAL(10,3),
-    power_factor    DECIMAL(5,4),
-    event_ts        TIMESTAMP NOT NULL,
-    received_at     TIMESTAMP NOT NULL DEFAULT NOW(),
-    source          VARCHAR(30) DEFAULT 'api',
-    -- Z-score anomaly detection
-    z_score         DECIMAL(8,4),
-    is_anomaly      BOOLEAN NOT NULL DEFAULT false,
-    anomaly_reason  VARCHAR(100)
-);
-CREATE INDEX IF NOT EXISTS idx_live_substation  ON live_meter_events(substation_id, event_ts DESC);
-CREATE INDEX IF NOT EXISTS idx_live_meter       ON live_meter_events(meter_id, event_ts DESC);
-CREATE INDEX IF NOT EXISTS idx_live_anomaly     ON live_meter_events(is_anomaly) WHERE is_anomaly = true;
-CREATE INDEX IF NOT EXISTS idx_live_received    ON live_meter_events(received_at DESC);
-
-ALTER TABLE live_meter_events ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "Service live_events access" ON live_meter_events FOR ALL USING (true);
-
--- ── Per-Meter Stability Scores ─────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS meter_stability_scores (
-    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    meter_id            VARCHAR(100) NOT NULL,
-    substation_id       VARCHAR(100) NOT NULL,
-    org_id              UUID REFERENCES organizations(id) ON DELETE SET NULL,
-    -- Rolling statistics (30-day window)
-    reading_count       INTEGER NOT NULL DEFAULT 0,
-    rolling_mean_kwh    DECIMAL(12,4),
-    rolling_std_kwh     DECIMAL(12,4),
-    coefficient_of_variation DECIMAL(8,6),
-    -- Trend (linear regression slope on last 30 readings)
-    trend_slope         DECIMAL(12,8),
-    trend_direction     VARCHAR(10),   -- UP | DOWN | FLAT
-    -- Anomaly rate (last 30 days)
-    anomaly_rate_30d    DECIMAL(6,4),
-    -- Composite score (0–1, higher is more stable)
-    stability_score     DECIMAL(6,4) NOT NULL DEFAULT 0.5,
-    label               VARCHAR(20),   -- STABLE | WATCHING | UNSTABLE | CRITICAL
-    -- Physics bounds (±3σ)
-    physics_lower_kwh   DECIMAL(12,4),
-    physics_upper_kwh   DECIMAL(12,4),
-    last_reading_kwh    DECIMAL(12,4),
-    last_reading_ts     TIMESTAMP,
-    updated_at          TIMESTAMP NOT NULL DEFAULT NOW(),
-    UNIQUE(meter_id, substation_id)
-);
-CREATE INDEX IF NOT EXISTS idx_stability_substation ON meter_stability_scores(substation_id);
-CREATE INDEX IF NOT EXISTS idx_stability_meter      ON meter_stability_scores(meter_id);
-CREATE INDEX IF NOT EXISTS idx_stability_score      ON meter_stability_scores(stability_score);
-CREATE INDEX IF NOT EXISTS idx_stability_label      ON meter_stability_scores(label);
-
-ALTER TABLE meter_stability_scores ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "Service stability access" ON meter_stability_scores FOR ALL USING (true);
-
--- ── Model Drift Logs ───────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS model_drift_logs (
-    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id              UUID REFERENCES organizations(id) ON DELETE SET NULL,
-    -- PSI test
-    psi                 DECIMAL(8,6),
-    drift_level         VARCHAR(20) NOT NULL,  -- NONE | MINOR | MODERATE | SEVERE
-    -- KS test
-    ks_statistic        DECIMAL(8,6),
-    ks_pvalue           DECIMAL(8,6),
-    -- Rate shift
-    reference_rate      DECIMAL(6,4),
-    current_rate        DECIMAL(6,4),
-    rate_shift          DECIMAL(6,4),
-    -- Sample sizes
-    n_reference         INTEGER NOT NULL DEFAULT 0,
-    n_evaluation        INTEGER NOT NULL DEFAULT 0,
-    sufficient_data     BOOLEAN NOT NULL DEFAULT false,
-    -- Action
-    requires_retraining BOOLEAN NOT NULL DEFAULT false,
-    retrain_triggered   BOOLEAN NOT NULL DEFAULT false,
-    interpretation      TEXT,
-    detected_at         TIMESTAMP NOT NULL DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_drift_detected_at ON model_drift_logs(detected_at DESC);
-CREATE INDEX IF NOT EXISTS idx_drift_level       ON model_drift_logs(drift_level);
-CREATE INDEX IF NOT EXISTS idx_drift_retrain     ON model_drift_logs(requires_retraining) WHERE requires_retraining = true;
-
-ALTER TABLE model_drift_logs ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "Service drift access" ON model_drift_logs FOR ALL USING (true);
-
--- ── Transformer Aging Records ──────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS transformer_aging_records (
-    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    substation_id       VARCHAR(100) NOT NULL,
-    transformer_tag     VARCHAR(100) NOT NULL,
-    org_id              UUID REFERENCES organizations(id) ON DELETE SET NULL,
-    -- Physical parameters
-    rated_kva           DECIMAL(10,2),
-    install_year        INTEGER,
-    designed_life_years DECIMAL(6,2) DEFAULT 30,
-    -- Operating conditions
-    top_oil_temp_c      DECIMAL(6,2),
-    ambient_temp_c      DECIMAL(6,2),
-    hot_spot_temp_c     DECIMAL(6,2),
-    load_factor         DECIMAL(5,4),
-    -- IEC 60076-7 computed outputs
-    thermal_aging_factor DECIMAL(10,6),
-    life_consumed_pct   DECIMAL(6,2),
-    estimated_rul_years DECIMAL(6,2),
-    failure_probability DECIMAL(6,4),
-    health_index        DECIMAL(6,2),
-    condition_class     VARCHAR(20),  -- GOOD | FAIR | POOR | CRITICAL
-    maintenance_flag    BOOLEAN DEFAULT false,
-    replacement_flag    BOOLEAN DEFAULT false,
-    computed_at         TIMESTAMP NOT NULL DEFAULT NOW(),
-    created_at          TIMESTAMP NOT NULL DEFAULT NOW(),
-    UNIQUE(substation_id, transformer_tag)
-);
-CREATE INDEX IF NOT EXISTS idx_txaging_substation   ON transformer_aging_records(substation_id);
-CREATE INDEX IF NOT EXISTS idx_txaging_tag          ON transformer_aging_records(transformer_tag);
-CREATE INDEX IF NOT EXISTS idx_txaging_condition    ON transformer_aging_records(condition_class);
-CREATE INDEX IF NOT EXISTS idx_txaging_failure_prob ON transformer_aging_records(failure_probability);
-CREATE INDEX IF NOT EXISTS idx_txaging_computed     ON transformer_aging_records(computed_at DESC);
-
-ALTER TABLE transformer_aging_records ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "Service aging access" ON transformer_aging_records FOR ALL USING (true);
-
--- ── Immutable Audit Ledger ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS audit_ledger (
-    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    sequence_no   INTEGER NOT NULL,
-    org_id        UUID REFERENCES organizations(id) ON DELETE SET NULL,
-    user_id       UUID REFERENCES users(id) ON DELETE SET NULL,
-    user_email    VARCHAR(255),
-    user_role     VARCHAR(50),
-    event_type    VARCHAR(80) NOT NULL,
-    resource_type VARCHAR(50),
-    resource_id   VARCHAR(100),
-    substation_id VARCHAR(100),
-    summary       TEXT,
-    metadata_json JSONB,
-    entry_hash    VARCHAR(64) NOT NULL,
-    prev_hash     VARCHAR(64),
-    recorded_at   TIMESTAMP NOT NULL DEFAULT NOW(),
-    ip_address    VARCHAR(45)
-);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_audit_sequence    ON audit_ledger(sequence_no);
-CREATE INDEX IF NOT EXISTS idx_audit_recorded_at        ON audit_ledger(recorded_at DESC);
-CREATE INDEX IF NOT EXISTS idx_audit_event_type         ON audit_ledger(event_type);
-CREATE INDEX IF NOT EXISTS idx_audit_org_id             ON audit_ledger(org_id);
-
-ALTER TABLE audit_ledger ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "Service audit access" ON audit_ledger FOR ALL USING (true);
