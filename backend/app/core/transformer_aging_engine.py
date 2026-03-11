@@ -63,7 +63,7 @@ REFERENCE_HOTSPOT_C = 98.0
 ACTIVATION_ENERGY = 15000.0
 
 # Reference temperature in Kelvin
-REFERENCE_TEMP_K = 383.0  # 110°C = 383K (IEC uses 383K for 98°C ref in one formulation)
+REFERENCE_TEMP_K = 371.0  # 98°C + 273K — IEC 60076-7 rated reference (V=1.0 at 98°C hotspot)
 # Using the standard value: V=1 at Θh=98°C
 # V = exp(15000/383 − 15000/(98+273)) = exp(39.16 − 40.43) = exp(-1.27)... 
 # IEC actually uses: V = exp((E_A/R)(1/T_ref - 1/T_hs))
