@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { api, UploadResult } from '@/lib/api'
 
@@ -17,9 +17,25 @@ export default function UploadPage() {
   const [dragging, setDragging] = useState(false)
   const [authError, setAuthError] = useState('')
   const [isAuthed, setIsAuthed] = useState(false)
+  const [authedEmail, setAuthedEmail] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // ── Drag-drop ────────────────────────────────────────────────────────
+  // Check for existing valid token on mount
+  useEffect(() => {
+    const token = localStorage.getItem('urjarakshak_token')
+    if (token) {
+      setIsAuthed(true)
+      // Verify token is still valid with a lightweight call
+      api.getStatsSummary().catch(() => {
+        // Token expired — clear it
+        localStorage.removeItem('urjarakshak_token')
+        localStorage.removeItem('urjarakshak_role')
+        localStorage.removeItem('urjarakshak_user_id')
+        setIsAuthed(false)
+      })
+    }
+  }, [])
+
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setDragging(false)
@@ -60,7 +76,7 @@ export default function UploadPage() {
     if (!file) return
     if (!substationId.trim()) { setErrorMsg('Substation ID is required'); return }
 
-    // Check auth
+    // Require auth
     const token = localStorage.getItem('urjarakshak_token')
     if (!token && !isAuthed) {
       setStage('auth')
@@ -74,8 +90,16 @@ export default function UploadPage() {
       setResult(res)
       setStage('done')
     } catch (e: any) {
-      setErrorMsg(e.message || 'Upload failed')
-      setStage('error')
+      const msg: string = e.message || 'Upload failed'
+      // Token expired mid-session — go back to auth
+      if (msg.includes('Authentication') || msg.includes('401') || msg.includes('expired')) {
+        setIsAuthed(false)
+        setStage('auth')
+        setAuthError('Your session expired. Please log in again.')
+      } else {
+        setErrorMsg(msg)
+        setStage('error')
+      }
     }
   }
 
@@ -150,7 +174,7 @@ export default function UploadPage() {
           <div className="section-label">Authentication Required</div>
           <div className="panel" style={{ maxWidth: 420 }}>
             <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20 }}>
-              Upload requires an analyst or admin account.
+              Upload requires an analyst or admin account. Register to create a free account.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
               <input
@@ -159,7 +183,7 @@ export default function UploadPage() {
                 style={inputStyle}
               />
               <input
-                type="password" placeholder="Password" value={password}
+                type="password" placeholder="Password (min 8 chars)" value={password}
                 onChange={e => setPassword(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleLogin()}
                 style={inputStyle}
@@ -171,6 +195,26 @@ export default function UploadPage() {
               <button onClick={handleRegister} className="btn-secondary" style={{ flex: 1, justifyContent: 'center', cursor: 'pointer' }}>Register</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Logged-in status bar */}
+      {isAuthed && stage !== 'auth' && (
+        <div style={{ marginBottom: 20, padding: '10px 16px', background: 'rgba(0,245,196,0.06)', border: '1px solid rgba(0,245,196,0.2)', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--teal)' }}>
+            ✓ Authenticated — ready to upload
+          </span>
+          <button
+            onClick={() => {
+              localStorage.removeItem('urjarakshak_token')
+              localStorage.removeItem('urjarakshak_role')
+              localStorage.removeItem('urjarakshak_user_id')
+              setIsAuthed(false)
+            }}
+            style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}
+          >
+            Log out
+          </button>
         </div>
       )}
 
