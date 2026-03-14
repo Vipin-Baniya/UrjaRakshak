@@ -148,15 +148,37 @@ app = FastAPI(
 )
 
 # ── Middleware (order matters — outermost first) ──────────────────────────
-cors_kwargs = {
+# CORS: when allow_credentials=True the browser rejects wildcard allow_headers.
+# Enumerate all headers the frontend actually sends.
+_cors_origins = list(settings.ALLOWED_ORIGINS)
+# Always include common local dev origins so first-time setup works
+_local_dev = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+]
+for o in _local_dev:
+    if o not in _cors_origins:
+        _cors_origins.append(o)
+
+cors_kwargs: dict = {
     "allow_credentials": True,
-    "allow_methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    "allow_headers": ["*"],
+    "allow_methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    "allow_headers": [
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "Origin",
+        "X-Requested-With",
+        "Cache-Control",
+    ],
+    "expose_headers": ["Content-Length", "X-Request-ID"],
 }
 if settings.CORS_ALLOW_ORIGIN_REGEX:
     cors_kwargs["allow_origin_regex"] = settings.CORS_ALLOW_ORIGIN_REGEX
 else:
-    cors_kwargs["allow_origins"] = settings.ALLOWED_ORIGINS
+    cors_kwargs["allow_origins"] = _cors_origins
 
 app.add_middleware(CORSMiddleware, **cors_kwargs)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
