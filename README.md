@@ -1,143 +1,142 @@
-# ⚡ UrjaRakshak
+# ⚡ UrjaRakshak v2.3
 ### Physics-Based Energy Integrity & Grid Intelligence Platform
 
-> *Energy is a civilizational lifeline. We protect it with intelligence, humility, and ethics.*
+> *Energy is a civilisational lifeline. We protect it with intelligence, humility, and ethics.*
 
 **Developer & Founder:** Vipin Baniya
 
 ---
 
-## Overview
+## Quick Start
 
-UrjaRakshak is a physics-first, AI-augmented platform for detecting electricity theft, quantifying grid losses, and protecting energy infrastructure — without surveillance or privacy violation.
-
-**Core Principle:** Physics before AI. Every result is grounded in thermodynamics and electrical engineering. No black-box accusations.
+### Prerequisites
+- Python 3.11+
+- Node.js 18+
+- PostgreSQL 14+ **or** a [Supabase](https://supabase.com) project (free tier works)
 
 ---
 
-## Project Structure
+### 1 · Backend
+
+```bash
+cd backend
+cp .env.example .env          # edit DATABASE_URL and SECRET_KEY
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+The server starts even without a `.env` file (uses safe dev defaults with a warning).
+API docs: **http://localhost:8000/api/docs**
+
+#### Supabase setup
+1. Create a free project at supabase.com
+2. Run `deployment/supabase/schema.sql` in the Supabase SQL editor
+3. Set `DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[REF].supabase.co:5432/postgres`
+   — SSL is auto-enabled when a `*.supabase.co` host is detected
+
+---
+
+### 2 · Frontend
+
+```bash
+cd frontend
+# .env.local is already provided (points to http://localhost:8000)
+# To override: edit frontend/.env.local
+npm install
+npm run dev
+```
+
+Open **http://localhost:3000**
+
+> **Both terminals must run simultaneously.** The frontend is a Next.js dev server; the backend is uvicorn.
+
+---
+
+### 3 · First upload
+
+1. Go to **http://localhost:3000/upload**
+2. Select a substation ID (e.g. `SS001`)
+3. Drag in a CSV file with columns `timestamp, meter_id, energy_kwh`
+4. Click **Run Analysis** — you'll be prompted to Register/Login
+5. Register creates an `analyst` account immediately and logs you in
+
+---
+
+## Environment Variables
+
+### Backend (`backend/.env`)
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `DATABASE_URL` | ✅ prod | local postgres | PostgreSQL connection string |
+| `SECRET_KEY` | ✅ prod | dev default | JWT signing key (32+ chars) |
+| `ENVIRONMENT` | | `development` | `development` / `staging` / `production` |
+| `ALLOWED_ORIGINS` | | `http://localhost:3000,3001` | Comma-separated CORS origins |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | | `60` | JWT expiry |
+| `ANTHROPIC_API_KEY` | optional | — | AI interpretation (Claude) |
+| `OPENAI_API_KEY` | optional | — | AI interpretation fallback |
+
+### Frontend (`frontend/.env.local`)
+
+| Variable | Default | Description |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Backend URL |
+
+---
+
+## Architecture
 
 ```
 urjarakshak/
-├── backend/                    # FastAPI backend (Python 3.11)
+├── backend/                      # FastAPI + Python 3.11
 │   ├── app/
-│   │   ├── api/v1/             # REST API endpoints
-│   │   │   ├── analysis.py     # Grid analysis endpoints
-│   │   │   └── grid.py         # Grid management
-│   │   ├── core/               # Physics & AI engines
-│   │   │   ├── physics_engine.py       # ⚡ Physics Truth Engine (572 lines)
-│   │   │   └── attribution_engine.py   # 🔍 Loss Attribution Engine (606 lines)
-│   │   ├── ethics/             # Ethics & audit framework
-│   │   │   ├── audit_logger.py
-│   │   │   └── safeguards.py
-│   │   ├── grid/               # Grid topology & synthetic data
-│   │   │   └── synthetic_generator.py
-│   │   ├── schemas/            # Pydantic models
-│   │   ├── tests/              # Test suite
-│   │   ├── config.py           # Settings management
-│   │   ├── database.py         # Async PostgreSQL
-│   │   └── main.py             # FastAPI app entry
-│   ├── render.yaml             # Render free-tier deploy config
-│   ├── requirements.txt        # Full dependencies
-│   └── requirements-render-free.txt   # Stripped for free tier
+│   │   ├── api/v1/               # REST endpoints
+│   │   │   ├── auth_routes.py    # POST /auth/register, /auth/login
+│   │   │   ├── upload.py         # POST /upload/meter-data
+│   │   │   ├── analysis.py       # POST /analysis/validate
+│   │   │   ├── ai.py             # GHI + AI interpretation
+│   │   │   ├── inspection.py     # Inspection workflow
+│   │   │   ├── stream.py         # SSE live streaming
+│   │   │   └── governance.py     # Drift / aging / audit
+│   │   ├── core/                 # Physics & AI engines
+│   │   │   ├── ghi_engine.py
+│   │   │   ├── physics_constrained_anomaly.py
+│   │   │   ├── load_forecasting_engine.py
+│   │   │   ├── drift_detection_engine.py
+│   │   │   ├── transformer_aging_engine.py
+│   │   │   └── ai_interpretation_engine.py
+│   │   ├── auth/__init__.py      # JWT + RBAC
+│   │   ├── config.py             # Settings
+│   │   ├── database.py           # Async SQLAlchemy (asyncpg)
+│   │   └── main.py               # App entry, CORS, middleware
+│   └── .env.example
 │
-├── frontend/                   # Next.js frontend (TypeScript)
-│   └── src/
-│       ├── app/
-│       │   ├── page.tsx        # Landing page
-│       │   ├── dashboard/      # Grid monitoring dashboard
-│       │   ├── docs/           # API documentation
-│       │   └── layout.tsx      # Root layout (includes Footer)
-│       ├── components/ui/      # Reusable UI components
-│       │   ├── Footer.tsx      # Footer with developer credits
-│       │   └── AnimatedNumber.tsx
-│       ├── hooks/              # React hooks
-│       └── lib/api.ts          # API client
+├── frontend/                     # Next.js 14 + TypeScript
+│   ├── src/app/
+│   │   ├── dashboard/            # Live metrics dashboard
+│   │   ├── upload/               # Meter data upload + auth
+│   │   ├── ghi/                  # Grid Health Index
+│   │   ├── inspections/          # Inspection workflow
+│   │   ├── stream/               # Real-time SSE monitoring
+│   │   └── governance/           # Drift / aging / audit
+│   ├── src/lib/api.ts            # Typed API client
+│   ├── .env.local                # NEXT_PUBLIC_API_URL (gitignored)
+│   └── .env.local.example        # Template
 │
-├── deployment/
-│   └── supabase/schema.sql     # Database schema
-├── docker-compose.yml          # Local dev environment
-├── ETHICAL_CHARTER.md          # Ethics framework
-├── RENDER_FREE_DEPLOYMENT.md   # Step-by-step Render guide
-└── LICENSE
+└── deployment/
+    └── supabase/schema.sql       # Complete DB schema (idempotent)
 ```
 
 ---
 
-## Quick Start (Local)
+## Design Principles
 
-```bash
-# 1. Clone and setup
-git clone https://github.com/YOUR_USERNAME/urjarakshak.git
-cd urjarakshak
-
-# 2. Backend
-cd backend
-cp .env.example .env         # Edit with your values
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-# → http://localhost:8000
-
-# 3. Frontend
-cd ../frontend
-npm install
-NEXT_PUBLIC_API_URL=http://localhost:8000 npm run dev
-# → http://localhost:3000
-```
-
-Or with Docker:
-```bash
-docker-compose up
-```
-
----
-
-## Free Deployment (100% $0/month)
-
-| Service | Purpose | Free Tier |
-|---------|---------|-----------|
-| **Render** | Backend hosting | 512MB RAM |
-| **Supabase** | PostgreSQL database | 500MB |
-| **Vercel** | Frontend hosting | Unlimited |
-
-See [`RENDER_FREE_DEPLOYMENT.md`](./RENDER_FREE_DEPLOYMENT.md) for full step-by-step guide.
-
----
-
-## API Endpoints
-
-```
-GET  /                          # System info
-GET  /health                    # Health check
-POST /api/v1/analysis/validate  # Grid loss analysis
-GET  /api/v1/grid               # Grid data
-GET  /api/v1/physics/info       # Physics engine info
-GET  /api/v1/stats              # System statistics
-```
-
----
-
-## Tech Stack
-
-**Backend:** Python 3.11 · FastAPI · SQLAlchemy Async · asyncpg · Pydantic v2 · NumPy  
-**Frontend:** Next.js · TypeScript · TailwindCSS · Framer Motion  
-**Database:** PostgreSQL (Supabase)  
-**Deployment:** Render · Vercel · Docker  
-
----
-
-## Ethics
-
-UrjaRakshak is designed with an **Ethics Firewall**:
-- No individual-level surveillance
-- Conservative attribution (never over-accuse)
-- Explicit confidence scores on all outputs
-- Human-in-the-loop enforcement — AI recommends, humans decide
-- Full audit logging
-
-See [`ETHICAL_CHARTER.md`](./ETHICAL_CHARTER.md) for details.
-
----
-
-**Developer & Founder:** Vipin Baniya  
-**© 2026 UrjaRakshak. All rights reserved.**
+| Principle | Implementation |
+|---|---|
+| Physics-first | PBS subscores 35% of GHI; physics gate hard-overrides ML |
+| Explainable | Every formula documented; Fourier decomposition shown |
+| Hard to game | 3-gate anomaly logic (physics + z-score + Isolation Forest) |
+| Uncertainty-aware | 95%/99% confidence bands; refuses when confidence < 0.5 |
+| Ethics | No individual attribution; infrastructure-scope only |
+| Auditable | SHA-256 hash chain; prompt_hash on every AI call |
+| Offline-capable | Full functionality without AI API keys |
