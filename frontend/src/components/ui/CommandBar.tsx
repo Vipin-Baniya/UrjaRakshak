@@ -10,14 +10,10 @@ export function CommandBar() {
   const [timestamp, setTimestamp] = useState('')
 
   useEffect(() => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
-    if (apiUrl) {
-      fetch(`${apiUrl}/health`)
-        .then(() => setIsLive(true))
-        .catch(() => setIsLive(false))
-    } else {
-      setIsLive(false)
-    }
+    const apiUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '')
+    fetch(`${apiUrl}/health`)
+      .then(r => r.ok ? setIsLive(true) : setIsLive(false))
+      .catch(() => setIsLive(false))
   }, [])
 
   useEffect(() => {
