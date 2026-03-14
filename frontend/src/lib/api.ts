@@ -3,13 +3,26 @@
  * Centralised fetch wrapper for all backend calls.
  */
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || ''
+// NEXT_PUBLIC_API_URL is baked in at build time by next.config.js.
+// Empty-string guard ensures we never send requests to the same-origin
+// Next.js dev server (which has no /api/v1 routes).
+const BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
 async function fetcher<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
-    ...init,
-  })
+  let res: Response
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      headers: { 'Content-Type': 'application/json', ...init?.headers },
+      ...init,
+    })
+  } catch (networkErr: any) {
+    // Network-level failure (backend not running, CORS preflight rejected, etc.)
+    throw new Error(
+      `Cannot reach the backend at ${BASE}. ` +
+      `Make sure the backend is running: cd backend && uvicorn app.main:app --reload --port 8000`
+    )
+  }
+
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     // Auto-clear expired/invalid token so user sees login prompt on next attempt
@@ -18,9 +31,10 @@ async function fetcher<T>(path: string, init?: RequestInit): Promise<T> {
       if (!isAuthEndpoint) {
         localStorage.removeItem('urjarakshak_token')
         localStorage.removeItem('urjarakshak_role')
+        localStorage.removeItem('urjarakshak_user_id')
       }
     }
-    throw new Error(body?.detail || `HTTP ${res.status}`)
+    throw new Error(body?.detail || body?.message || `HTTP ${res.status}`)
   }
   return res.json()
 }
@@ -77,22 +91,36 @@ export const api = {
   },
 
   // ── Upload ───────────────────────────────────────────────────────────
-  uploadMeterData: (file: File, substationId: string) => {
+  uploadMeterData: async (file: File, substationId: string): Promise<UploadResult> => {
     const form = new FormData()
     form.append('file', file)
     form.append('substation_id', substationId)
     const token = getToken()
-    return fetch(`${BASE}/api/v1/upload/meter-data`, {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: form,
-    }).then(async (res) => {
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body?.detail || `HTTP ${res.status}`)
+
+    let res: Response
+    try {
+      res = await fetch(`${BASE}/api/v1/upload/meter-data`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      })
+    } catch {
+      throw new Error(
+        `Cannot reach the backend at ${BASE}. ` +
+        `Make sure the backend is running: cd backend && uvicorn app.main:app --reload --port 8000`
+      )
+    }
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      if (res.status === 401 && typeof window !== 'undefined') {
+        localStorage.removeItem('urjarakshak_token')
+        localStorage.removeItem('urjarakshak_role')
+        localStorage.removeItem('urjarakshak_user_id')
       }
-      return res.json() as Promise<UploadResult>
-    })
+      throw new Error(body?.detail || body?.message || `HTTP ${res.status}`)
+    }
+    return res.json()
   },
 
   listBatches: () =>
