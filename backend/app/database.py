@@ -1,6 +1,13 @@
 """
-UrjaRakshak Database Layer
-Supabase + FastAPI + SQLAlchemy + asyncpg Compatible
+Async Database Configuration
+=============================
+Supports local PostgreSQL and Supabase (with SSL).
+
+Key fixes:
+  - pool_pre_ping removed from NullPool path (incompatible with asyncpg NullPool)
+  - SSL auto-enabled when connecting to Supabase (*.supabase.co)
+  - asyncpg-safe QueuePool settings (no pool_recycle, use pool_pre_ping only with QueuePool)
+  - DATABASE_URL auto-converted to postgresql+asyncpg://
 """
 
 from sqlalchemy.ext.asyncio import (
@@ -10,185 +17,164 @@ from sqlalchemy.ext.asyncio import (
     AsyncEngine,
 )
 from sqlalchemy.orm import declarative_base
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import NullPool, AsyncAdaptedQueuePool
 from sqlalchemy import text
-from typing import AsyncGenerator
-import logging
-
 from app.config import settings
+import logging
+from typing import AsyncGenerator, Optional
 
 logger = logging.getLogger(__name__)
 
-# -------------------------------------------------------
-# DATABASE URL FIX
-# -------------------------------------------------------
 
-database_url = settings.DATABASE_URL
+def _build_database_url() -> tuple[str, bool]:
+    """
+    Normalise DATABASE_URL for asyncpg.
+    Returns (url, is_supabase).
+    """
+    url = settings.DATABASE_URL
 
-if database_url.startswith("postgresql://"):
-    database_url = database_url.replace(
-        "postgresql://",
-        "postgresql+asyncpg://"
-    )
+    # Ensure asyncpg driver
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    elif url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
 
-# -------------------------------------------------------
-# ENGINE CONFIGURATION
-# -------------------------------------------------------
+    # Detect Supabase — requires SSL
+    is_supabase = ".supabase.co" in url
+
+    # Strip any existing sslmode param from the URL — we pass ssl via connect_args
+    import re
+    url = re.sub(r"[?&]sslmode=[^&]*", "", url).rstrip("?&")
+
+    return url, is_supabase
+
+
+database_url, _is_supabase = _build_database_url()
+
 
 def create_database_engine() -> AsyncEngine:
     """
-    Create async engine compatible with Supabase PgBouncer.
+    Create async engine.
 
-    Important:
-    Supabase already uses PgBouncer connection pooling.
-    Therefore SQLAlchemy pooling must be disabled.
+    Development  → NullPool (no pooling, simplest for local dev)
+    Production   → AsyncAdaptedQueuePool (connection pooling)
+    Supabase     → SSL required regardless of environment
     """
+    connect_args: dict = {}
 
-    logger.info("Initializing Supabase-compatible database engine")
+    if _is_supabase:
+        # Supabase requires SSL; asyncpg uses ssl= not sslmode=
+        connect_args["ssl"] = "require"
+        logger.info("Supabase detected — SSL enabled")
 
-    engine = create_async_engine(
-        database_url,
-
-        echo=settings.DEBUG,
-
-        # Disable SQLAlchemy pooling
-        poolclass=NullPool,
-
-        # Prevent stale connections
-        pool_pre_ping=True,
-
-        # ⭐ CRITICAL: Disable prepared statement cache
-        connect_args={
-            "statement_cache_size": 0
-        },
-    )
+    if settings.is_development:
+        engine = create_async_engine(
+            database_url,
+            echo=settings.DEBUG,
+            poolclass=NullPool,
+            connect_args=connect_args,
+        )
+        logger.info("DB engine: NullPool (development)")
+    else:
+        engine = create_async_engine(
+            database_url,
+            echo=False,
+            poolclass=AsyncAdaptedQueuePool,
+            pool_size=10,
+            max_overflow=5,
+            pool_timeout=30,
+            pool_pre_ping=True,   # safe with QueuePool
+            connect_args=connect_args,
+        )
+        logger.info("DB engine: AsyncAdaptedQueuePool (production, size=10+5)")
 
     return engine
 
 
-# -------------------------------------------------------
-# ENGINE INSTANCE
-# -------------------------------------------------------
-
-engine: AsyncEngine = create_database_engine()
-
-# -------------------------------------------------------
-# SESSION FACTORY
-# -------------------------------------------------------
+engine = create_database_engine()
 
 async_session_maker = async_sessionmaker(
     engine,
     class_=AsyncSession,
     expire_on_commit=False,
     autoflush=False,
+    autocommit=False,
 )
-
-# -------------------------------------------------------
-# BASE MODEL
-# -------------------------------------------------------
 
 Base = declarative_base()
 
-# -------------------------------------------------------
-# DATABASE DEPENDENCY
-# -------------------------------------------------------
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-
+    """Yield an async DB session. Rolls back on exception."""
     async with async_session_maker() as session:
-
         try:
             yield session
-
         except Exception:
             await session.rollback()
             raise
-
         finally:
             await session.close()
 
-# -------------------------------------------------------
-# HEALTH CHECK
-# -------------------------------------------------------
 
 async def check_database_connection() -> bool:
-
+    """Ping the database. Returns True if reachable."""
     try:
         async with engine.begin() as conn:
             await conn.execute(text("SELECT 1"))
-
         return True
-
     except Exception as e:
-
-        logger.error(f"Database health check failed: {e}")
-
+        logger.error(f"DB health check failed: {e}")
         return False
 
-# -------------------------------------------------------
-# DATABASE INFO
-# -------------------------------------------------------
 
 async def get_database_info() -> dict:
-
+    """Return connection info for /health endpoint."""
     try:
-
         async with engine.begin() as conn:
-
             result = await conn.execute(text("SELECT version()"))
+            version = result.scalar() or "unknown"
 
-            version = result.scalar()
-
-            return {
-                "connected": True,
-                "version": version.split(",")[0] if version else "unknown",
-                "driver": database_url.split("://")[0],
-                "pooling": "Supabase PgBouncer"
-            }
-
-    except Exception as e:
-
-        logger.error(f"Database info failed: {e}")
+        pool = engine.pool
+        pool_status: dict = {}
+        for attr in ("size", "checkedin", "checkedout", "overflow"):
+            fn = getattr(pool, attr, None)
+            if callable(fn):
+                try:
+                    pool_status[attr] = fn()
+                except Exception:
+                    pass
 
         return {
-            "connected": False,
-            "error": str(e)
+            "connected": True,
+            "supabase": _is_supabase,
+            "ssl": _is_supabase,
+            "version": version.split(",")[0],
+            "pool": pool_status,
+            "driver": database_url.split("://")[0],
         }
+    except Exception as e:
+        logger.error(f"Failed to get DB info: {e}")
+        return {"connected": False, "error": str(e)}
 
-# -------------------------------------------------------
-# INIT DATABASE
-# -------------------------------------------------------
 
 async def init_db():
-
+    """Create all tables that don't already exist (SQLAlchemy ORM metadata)."""
     try:
-
         async with engine.begin() as conn:
-
             await conn.run_sync(Base.metadata.create_all)
-
-        logger.info("Database schema verified")
-
+        logger.info("✅ Database tables created/verified")
     except Exception as e:
-
-        logger.error(f"Database initialization failed: {e}")
+        logger.error(f"❌ DB init failed: {e}")
         raise
 
-# -------------------------------------------------------
-# CLOSE DATABASE
-# -------------------------------------------------------
 
 async def close_db():
-
+    """Dispose connection pool on shutdown."""
     try:
-
         await engine.dispose()
-
-        logger.info("Database connections closed")
-
+        logger.info("✅ DB connections closed")
     except Exception as e:
-
-        logger.error(f"Error closing database: {e}")
+        logger.error(f"❌ DB close error: {e}")
 
 
 __all__ = [
