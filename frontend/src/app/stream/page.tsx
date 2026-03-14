@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { streamApi, LiveEvent, SubstationStability } from '@/lib/api'
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || ''
+const BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
 function getToken() {
   if (typeof window === 'undefined') return null
