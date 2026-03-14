@@ -59,7 +59,12 @@ class TokenResponse(BaseModel):
 
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str = Field(..., min_length=8, description="Min 8 characters")
+    password: str = Field(
+        ...,
+        min_length=8,
+        max_length=72,
+        description="Password must be between 8 and 72 characters"
+    )
     full_name: Optional[str] = None
     role: str = Field(default="viewer", pattern="^(admin|analyst|viewer)$")
 
@@ -90,12 +95,18 @@ class TokenData(BaseModel):
 # ── Core auth functions ───────────────────────────────────────────────────
 
 def hash_password(password: str) -> str:
-    """Hash password with bcrypt"""
+    """
+    Hash password with bcrypt.
+
+    bcrypt has a hard limit of 72 bytes.
+    We truncate safely to avoid runtime errors.
+    """
+    password = password[:72]
     return pwd_context.hash(password)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Verify password against bcrypt hash"""
+    plain = plain[:72]
     return pwd_context.verify(plain, hashed)
 
 
