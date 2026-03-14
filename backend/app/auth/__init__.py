@@ -91,13 +91,11 @@ class TokenData(BaseModel):
 
 def hash_password(password: str) -> str:
     """Hash password with bcrypt"""
-    password = password.encode("utf-8")[:72].decode("utf-8", "ignore")
     return pwd_context.hash(password)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
     """Verify password against bcrypt hash"""
-    password = password.encode("utf-8")[:72].decode("utf-8", "ignore")
     return pwd_context.verify(plain, hashed)
 
 
