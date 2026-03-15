@@ -1,54 +1,335 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 
-const sections = [
-  {
-    group: 'System',
-    items: [
-      { id: 'architecture', label: 'Architecture' },
-      { id: 'ethics', label: 'Ethics Framework' },
-    ],
-  },
-  {
-    group: 'Engines',
-    items: [
-      { id: 'physics', label: 'Physics Engine' },
-      { id: 'attribution', label: 'Attribution Model' },
-      { id: 'ml', label: 'Anomaly Detection' },
-    ],
-  },
-  {
-    group: 'Interface',
-    items: [
-      { id: 'api', label: 'API Reference' },
-      { id: 'auth', label: 'Authentication' },
-    ],
-  },
+const NAV = [
+  { group: 'System',   items: [{ id: 'architecture', label: 'Architecture' }, { id: 'ethics', label: 'Ethics Framework' }] },
+  { group: 'Engines',  items: [{ id: 'physics', label: 'Physics Engine' }, { id: 'ghi', label: 'Grid Health Index' }, { id: 'ml', label: 'Anomaly Detection' }, { id: 'aging', label: 'Transformer Aging' }] },
+  { group: 'Interface',items: [{ id: 'api', label: 'API Reference' }, { id: 'auth', label: 'Authentication' }] },
 ]
+
+const CONTENT: Record<string, { title: string; body: React.ReactNode }> = {
+  architecture: {
+    title: 'System Architecture',
+    body: (
+      <div>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.75, marginBottom: 20 }}>
+          UrjaRakshak is a physics-first energy integrity platform. Every analysis starts with a thermodynamic
+          ground truth and works outward — never the other way.
+        </p>
+        <div className="sec-label accent">Stack</div>
+        {[
+          ['Backend', 'FastAPI + Python 3.11, SQLAlchemy async (asyncpg), PostgreSQL / Supabase'],
+          ['Frontend', 'Next.js 14, TypeScript, responsive CSS (no Tailwind runtime)'],
+          ['Auth', 'JWT (HS256) with role-based access — admin / analyst / viewer'],
+          ['ML', 'scikit-learn Isolation Forest + statistical z-score ensemble'],
+          ['Streaming', 'Server-Sent Events — in-memory queues per substation, no Redis required'],
+          ['Audit', 'SHA-256 hash chain (AuditLedger table) — tamper-evident, per-action'],
+        ].map(([k, v]) => (
+          <div key={k} style={{ display: 'flex', gap: 16, padding: '10px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--cyan)', minWidth: 110, flexShrink: 0 }}>{k}</span>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{v}</span>
+          </div>
+        ))}
+        <div className="sec-label" style={{ marginTop: 24 }}>Data Flow</div>
+        {[
+          '1. CSV/Excel upload → per-meter Z-score anomaly detection → stored in MeterReading table',
+          '2. Physics validation → I²R losses + transformer losses → residual = actual − expected',
+          '3. GHI engine → PBS·0.35 + ASS·0.20 + CS·0.15 + TSS·0.15 + DIS·0.15 → score 0–100',
+          '4. Risk classifier → inspection ticket auto-created if residual > 8% or GHI < 50',
+          '5. AI interpretation (optional) → Claude/OpenAI generates structured narrative',
+          '6. Drift detection → PSI + K-S test → auto-retrain trigger if SEVERE',
+        ].map((s, i) => (
+          <div key={i} style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', padding: '6px 0', lineHeight: 1.6 }}>{s}</div>
+        ))}
+      </div>
+    ),
+  },
+  ethics: {
+    title: 'Ethics Framework',
+    body: (
+      <div>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.75, marginBottom: 20 }}>
+          UrjaRakshak is built for infrastructure-scope analysis only. Individual attribution is
+          deliberately out of scope — the system is not designed to identify people.
+        </p>
+        <div className="sec-label accent">Hard Constraints</div>
+        {[
+          ['No individual attribution', 'Loss causes are attributed to infrastructure categories, never to people. The Attribution Engine refuses individual-level outputs.'],
+          ['Uncertainty-first', 'The physics engine quantifies uncertainty explicitly and refuses to output when confidence < 0.5.'],
+          ['Explainable outputs', 'Every formula is documented. The GHI computation shows all five subscores. No black-box results.'],
+          ['Audit trail', 'Every analysis, upload, and AI call is recorded in the AuditLedger with a SHA-256 hash chain.'],
+          ['Strict mode', 'When ENABLE_STRICT_ETHICS=true, the physics engine applies additional refusal conditions on low-quality measurements.'],
+        ].map(([k, v]) => (
+          <div key={k} style={{ marginBottom: 14, padding: '12px 16px', background: 'var(--bg-elevated)', borderRadius: 'var(--r-md)', border: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--cyan)', marginBottom: 5 }}>{k}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65 }}>{v}</div>
+          </div>
+        ))}
+      </div>
+    ),
+  },
+  physics: {
+    title: 'Physics Truth Engine (PTE v2.1)',
+    body: (
+      <div>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.75, marginBottom: 20 }}>
+          The core of UrjaRakshak. Validates energy conservation using the First Law of Thermodynamics.
+          Computes expected technical losses from component parameters. The residual is the gap
+          between actual and expected — the signal worth investigating.
+        </p>
+        <div className="sec-label accent">Formula</div>
+        <div className="panel panel-sm" style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 2 }}>
+          <div><span style={{ color: 'var(--cyan)' }}>Energy_in</span> = Energy_out + Technical_losses + Residual</div>
+          <div><span style={{ color: 'var(--cyan)' }}>Residual</span> = Actual_loss − Expected_technical_loss</div>
+          <div><span style={{ color: 'var(--cyan)' }}>Residual%</span> = |Residual| / Energy_in × 100</div>
+        </div>
+        <div className="sec-label">Component Loss Models</div>
+        {[
+          ['Transformer', 'No-load loss (core) = rated_kva × 0.002 × (1 − η) × aging_factor\nLoad loss (copper) = rated_kva × 0.008 × (load_fraction)²\nAging factor = 1 + age_years / 100'],
+          ['Distribution line', 'I²R loss (W) = I² × R_total where I = P / (√3 × V_kv × 1000)\nR_total = resistance_ohm_per_km × length_km\nTemperature correction: R_T = R_20 × (1 + α × (T − 20))'],
+        ].map(([k, v]) => (
+          <div key={k} style={{ marginBottom: 14 }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--amber)', marginBottom: 8 }}>{k}</div>
+            <div className="panel panel-sm" style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'pre-line', lineHeight: 1.8 }}>{v}</div>
+          </div>
+        ))}
+        <div className="sec-label" style={{ marginTop: 20 }}>Classification Thresholds</div>
+        {[
+          ['balanced', '< 1.5%', 'var(--green)'],
+          ['minor_imbalance', '1.5% – 4.0%', 'var(--cyan)'],
+          ['significant_imbalance', '4.0% – 8.0%', 'var(--amber)'],
+          ['critical_imbalance', '> 8.0%', 'var(--red)'],
+        ].map(([status, range, color]) => (
+          <div key={status} style={{ display: 'flex', gap: 16, padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: color as string, minWidth: 180 }}>{status}</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>{range}</span>
+          </div>
+        ))}
+      </div>
+    ),
+  },
+  ghi: {
+    title: 'Grid Health Index (GHI)',
+    body: (
+      <div>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.75, marginBottom: 20 }}>
+          A composite score (0–100) that combines physics balance, anomaly signals,
+          confidence, temporal stability, and data integrity into a single actionable metric.
+        </p>
+        <div className="sec-label accent">Formula</div>
+        <div className="panel panel-sm" style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 2 }}>
+          <div>GHI = (0.35 × PBS + 0.20 × ASS + 0.15 × CS + 0.15 × TSS + 0.15 × DIS) × 100</div>
+        </div>
+        <div className="sec-label">Subscores</div>
+        {[
+          ['PBS', 'Physics Balance Score (35%)', 'Piecewise linear on residual%: ≤1% → 1.0, 1–3% → linear to 0.5, 3–7% → linear to 0, >7% → 0'],
+          ['ASS', 'Anomaly Stability Score (20%)', 'Exponential decay: exp(−10 × anomaly_rate). A 10% anomaly rate gives ASS = 0.37.'],
+          ['CS',  'Confidence Score (15%)', 'Direct from the physics engine: [0, 1]. Low-quality measurements reduce this.'],
+          ['TSS', 'Temporal Stability Score (15%)', 'Rolling volatility of residual history. High variance → low TSS.'],
+          ['DIS', 'Data Integrity Score (15%)', 'Penalises missing and invalid readings: 1 − missing_ratio − invalid_ratio.'],
+        ].map(([code, name, desc]) => (
+          <div key={code} style={{ marginBottom: 12, padding: '12px 16px', background: 'var(--bg-elevated)', borderRadius: 'var(--r-md)', border: '1px solid var(--border-subtle)' }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'baseline', marginBottom: 5 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--cyan)', fontWeight: 600 }}>{code}</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>{name}</span>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{desc}</div>
+          </div>
+        ))}
+        <div className="sec-label" style={{ marginTop: 4 }}>Classification</div>
+        {[['≥ 90', 'HEALTHY', 'var(--green)'], ['≥ 70', 'STABLE', 'var(--cyan)'], ['≥ 50', 'DEGRADED', 'var(--amber)'], ['≥ 30', 'CRITICAL', '#FF6B35'], ['< 30', 'SEVERE', 'var(--red)']].map(([range, cls, color]) => (
+          <div key={cls} style={{ display: 'flex', gap: 16, padding: '7px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-tertiary)', minWidth: 50 }}>{range}</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: color as string }}>{cls}</span>
+          </div>
+        ))}
+      </div>
+    ),
+  },
+  ml: {
+    title: 'Anomaly Detection',
+    body: (
+      <div>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.75, marginBottom: 20 }}>
+          Three-gate ensemble. All three gates must agree before a reading is flagged as anomalous.
+          This makes the system hard to game and reduces false positives.
+        </p>
+        {[
+          ['Gate 1 — Physics', 'First Law of Thermodynamics. Output > Input is refused outright before any ML runs.'],
+          ['Gate 2 — Z-Score', 'Per-meter rolling baseline. Z = (reading − μ) / σ. Flagged if |Z| > 2.5 (configurable threshold).'],
+          ['Gate 3 — Isolation Forest', 'scikit-learn IsolationForest trained on 7 features: input_mwh, output_mwh, residual_mwh, residual_percent, confidence_score, time_of_day_hour, day_of_week. Contamination = 0.05.'],
+        ].map(([gate, desc]) => (
+          <div key={gate} style={{ marginBottom: 14, padding: '12px 16px', background: 'var(--bg-elevated)', borderRadius: 'var(--r-md)', border: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--amber)', marginBottom: 6 }}>{gate}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65 }}>{desc}</div>
+          </div>
+        ))}
+        <div className="sec-label" style={{ marginTop: 8 }}>Per-meter upload analysis</div>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+          When a CSV is uploaded, Z-scores are computed per meter against that meter's rolling
+          mean and standard deviation within the uploaded batch. The top anomalies by absolute
+          Z-score are returned in the upload response.
+        </p>
+      </div>
+    ),
+  },
+  aging: {
+    title: 'Transformer Aging Engine',
+    body: (
+      <div>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.75, marginBottom: 20 }}>
+          IEC 60076-7:2018 thermal aging model. The Arrhenius equation applied to paper
+          insulation degradation — every 6°C rise halves insulation life.
+        </p>
+        <div className="sec-label accent">Key Equations</div>
+        <div className="panel panel-sm" style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 2 }}>
+          <div><span style={{ color: 'var(--cyan)' }}>Hot-spot (°C)</span>: Θh = Θamb + ΔΘo_rated × K^(2n) + ΔΘh_rated × K^(2m)</div>
+          <div><span style={{ color: 'var(--cyan)' }}>Aging factor V</span>: exp(15000/383 − 15000/(Θh + 273))</div>
+          <div><span style={{ color: 'var(--cyan)' }}>RUL (years)</span>: (designed_life − years_installed) / V</div>
+          <div><span style={{ color: 'var(--cyan)' }}>Health Index</span>: 100 × (1 − life_consumed_pct)</div>
+          <div><span style={{ color: 'var(--cyan)' }}>P(fail 12m)</span>: 1 / (1 + exp(−10 × (life_consumed − 0.75)))</div>
+        </div>
+        <div className="sec-label">Parameters</div>
+        {[['K', 'Load factor (actual / rated)'], ['n', 'Oil exponent (ONAN: 0.8)'], ['m', 'Winding exponent (ONAN: 1.3)'], ['ΔΘo_rated', 'Rated top-oil rise: 55°C'], ['ΔΘh_rated', 'Rated hot-spot rise over oil: 23°C']].map(([p, d]) => (
+          <div key={p} style={{ display: 'flex', gap: 16, padding: '7px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--amber)', minWidth: 120 }}>{p}</span>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{d}</span>
+          </div>
+        ))}
+      </div>
+    ),
+  },
+  api: {
+    title: 'API Reference',
+    body: (
+      <div>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.75, marginBottom: 20 }}>
+          REST API at <code style={{ background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 3, fontFamily: 'var(--font-mono)', fontSize: 12 }}>http://localhost:8000</code>.
+          Interactive docs at <code style={{ background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 3, fontFamily: 'var(--font-mono)', fontSize: 12 }}>/api/docs</code>.
+        </p>
+        {[
+          { group: 'Auth', routes: [
+            ['POST', '/api/v1/auth/register', 'Register (email, password, role)'],
+            ['POST', '/api/v1/auth/login', 'Login → JWT access_token'],
+          ]},
+          { group: 'Upload', routes: [
+            ['POST', '/api/v1/upload/meter-data', 'Upload CSV/Excel (multipart). Runs Z-score detection.'],
+            ['GET',  '/api/v1/upload/dashboard', 'Aggregated dashboard data (public)'],
+          ]},
+          { group: 'Analysis', routes: [
+            ['POST', '/api/v1/analysis/validate', 'Physics validation. GHI + AI runs as BackgroundTask.'],
+            ['GET',  '/api/v1/analysis/stats/summary', 'Aggregated stats (30s cache)'],
+            ['GET',  '/api/v1/analysis/{id}', 'Single analysis with GHI + AI data'],
+          ]},
+          { group: 'GHI & AI', routes: [
+            ['GET',  '/api/v1/ai/ghi/dashboard', 'Fleet GHI overview'],
+            ['GET',  '/api/v1/ai/ghi/latest/{sub}', 'Latest GHI for a substation'],
+            ['GET',  '/api/v1/ai/status', 'AI engine configuration'],
+          ]},
+          { group: 'Inspections', routes: [
+            ['GET',  '/api/v1/inspections/', 'List (filterable by status, priority)'],
+            ['PATCH', '/api/v1/inspections/{id}', 'Update status, findings, resolution_notes'],
+            ['GET',  '/api/v1/inspections/stats/summary', 'Open / critical counts'],
+          ]},
+          { group: 'Stream', routes: [
+            ['GET',  '/api/v1/stream/live/{sub_id}', 'SSE stream for a substation (token= param)'],
+            ['POST', '/api/v1/stream/ingest', 'Push a single live event'],
+            ['GET',  '/api/v1/stream/substation/{sub}/stability', 'Meter stability scores'],
+          ]},
+          { group: 'Governance', routes: [
+            ['GET',  '/api/v1/org/drift/check', 'Run PSI + K-S drift detection now'],
+            ['POST', '/api/v1/org/aging/compute', 'IEC 60076-7 transformer aging'],
+            ['GET',  '/api/v1/org/aging/fleet', 'Fleet aging summary'],
+            ['GET',  '/api/v1/org/audit/recent', 'Audit log entries'],
+            ['GET',  '/api/v1/org/audit/verify', 'Verify SHA-256 hash chain'],
+          ]},
+        ].map(({ group, routes }) => (
+          <div key={group} style={{ marginBottom: 20 }}>
+            <div className="sec-label">{group}</div>
+            {routes.map(([method, path, desc]) => (
+              <div key={path} style={{ display: 'flex', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--border-subtle)', flexWrap: 'wrap' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: method === 'GET' ? 'var(--green)' : method === 'POST' ? 'var(--cyan)' : 'var(--amber)', minWidth: 44, textTransform: 'uppercase' }}>{method}</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-primary)', minWidth: 280 }}>{path}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{desc}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    ),
+  },
+  auth: {
+    title: 'Authentication',
+    body: (
+      <div>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.75, marginBottom: 20 }}>
+          JWT-based (HS256). Tokens expire after 60 minutes by default. Include in every
+          protected request as a Bearer token.
+        </p>
+        <div className="sec-label accent">Roles</div>
+        {[
+          ['admin',   'Full access. Can manage users, view all data.'],
+          ['analyst', 'Can upload data, run analyses, view all results. Cannot manage users.'],
+          ['viewer',  'Read-only. Can view dashboards and reports.'],
+        ].map(([role, desc]) => (
+          <div key={role} style={{ display: 'flex', gap: 16, padding: '10px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--cyan)', minWidth: 80 }}>{role}</span>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{desc}</span>
+          </div>
+        ))}
+        <div className="sec-label" style={{ marginTop: 20 }}>Quick start</div>
+        <div className="panel panel-sm" style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.9 }}>
+          <div><span style={{ color: 'var(--green)' }}># 1. Register</span></div>
+          <div>POST /api/v1/auth/register</div>
+          <div>{'{"email":"you@example.com","password":"min8chars","role":"analyst"}'}</div>
+          <div style={{ marginTop: 8 }}><span style={{ color: 'var(--green)' }}># 2. Login → get token</span></div>
+          <div>POST /api/v1/auth/login</div>
+          <div>{'{"email":"you@example.com","password":"min8chars"}'}</div>
+          <div style={{ marginTop: 8 }}><span style={{ color: 'var(--green)' }}># 3. Use token</span></div>
+          <div><span style={{ color: 'var(--cyan)' }}>Authorization: Bearer &lt;access_token&gt;</span></div>
+        </div>
+        <div style={{ marginTop: 16, padding: '10px 14px', borderRadius: 'var(--r-sm)', background: 'rgba(0,212,255,0.05)', border: '1px solid var(--border-dim)', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>
+          Demo credentials (after running seed_demo_data.py):<br />
+          <span style={{ color: 'var(--cyan)' }}>admin@urjarakshak.dev</span> / demo1234
+        </div>
+      </div>
+    ),
+  },
+}
 
 export default function Docs() {
   const [active, setActive] = useState('architecture')
-  const [copied, setCopied] = useState<string | null>(null)
-
-  const copy = (text: string, id: string) => {
-    navigator.clipboard.writeText(text)
-    setCopied(id)
-    setTimeout(() => setCopied(null), 1800)
-  }
+  const section = CONTENT[active]
 
   return (
-    <div className="docs-layout">
+    <div className="page" style={{ display: 'flex', gap: 32, alignItems: 'flex-start', paddingTop: 'clamp(24px,4vw,48px)' }}>
+
       {/* Sidebar */}
-      <aside className="docs-sidebar">
-        {sections.map(({ group, items }) => (
-          <div key={group} className="docs-sidebar-section" style={{ marginBottom: 20 }}>
-            <div className="docs-sidebar-section-lbl">{group}</div>
+      <aside style={{
+        width: 200, flexShrink: 0,
+        position: 'sticky', top: 'calc(var(--nav-h) + 20px)',
+        maxHeight: 'calc(100vh - var(--nav-h) - 40px)',
+        overflowY: 'auto',
+      }} className="hide-mobile">
+        {NAV.map(({ group, items }) => (
+          <div key={group} style={{ marginBottom: 20 }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 8, padding: '0 8px' } as React.CSSProperties}>
+              {group}
+            </div>
             {items.map(({ id, label }) => (
               <button
                 key={id}
-                className={active === id ? 'active' : ''}
                 onClick={() => setActive(id)}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: '7px 10px', borderRadius: 'var(--r-sm)', border: 'none',
+                  cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 11,
+                  background: active === id ? 'var(--cyan-dim)' : 'transparent',
+                  color: active === id ? 'var(--cyan)' : 'var(--text-tertiary)',
+                  transition: 'all var(--t-fast)',
+                  marginBottom: 1,
+                }}
               >
                 {label}
               </button>
@@ -57,351 +338,27 @@ export default function Docs() {
         ))}
       </aside>
 
-      {/* Content */}
-      <div className="docs-content">
-        {active === 'architecture' && (
-          <DocsSection title="System Architecture">
-            <p style={bodyStyle}>
-              UrjaRakshak is built on a physics-first principle: every analysis must be grounded
-              in provable thermodynamics before any AI or statistical layer is consulted.
-            </p>
-            <div className="section-label" style={{ marginTop: 32 }}>Processing Pipeline</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {[
-                ['Input Validation', 'Energy measurements validated against physical constraints. Negative energy, impossible outputs, and malformed data are rejected before processing begins.'],
-                ['Conservation Check', 'First Law of Thermodynamics enforced. Output energy cannot exceed input energy (tolerance: 0.1%). Violations result in immediate refusal with explicit explanation.'],
-                ['Loss Attribution', 'I²R line losses, transformer core + copper losses, and aging factors computed from component parameters. Multi-hypothesis attribution with probability weights.'],
-                ['Residual Analysis', 'Unexplained residual = actual loss − expected technical loss. Classified into BALANCED / IMBALANCE / CRITICAL_IMBALANCE based on confidence-weighted thresholds.'],
-                ['ML Anomaly Detection', 'Isolation Forest + statistical Z-score detectors. Ethics guardrails prevent individual accusation. Outputs are infrastructure-level inspection recommendations only.'],
-                ['Human Review', 'All anomaly flags require human review before any operational action. The system surfaces evidence; a qualified engineer makes the call.'],
-              ].map(([title, desc], i) => (
-                <div key={title} style={{ display: 'flex', gap: 16, padding: '14px 16px', background: 'var(--bg-panel)', borderRadius: 'var(--r-md)', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--teal)', minWidth: 24, marginTop: 1 }}>0{i + 1}</span>
-                  <div>
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>{title}</div>
-                    <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.65 }}>{desc}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </DocsSection>
-        )}
-
-        {active === 'ethics' && (
-          <DocsSection title="Ethics Framework">
-            <p style={bodyStyle}>
-              UrjaRakshak is designed for infrastructure protection, not individual surveillance.
-              Every design decision flows from this constraint.
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 24 }}>
-              {[
-                ['No Individual Tracking', 'individual_tracking: false is a hard-coded system constant. The ML engine cannot produce person-level outputs.'],
-                ['No Accusation Output', 'accusation_output: false. All anomaly recommendations are phrased as infrastructure inspection priorities.'],
-                ['Human Required', 'Confidence > 90% is still not sufficient for automated action. Human review is mandatory.'],
-                ['Conservative Threshold', 'When in doubt, the attribution engine assumes technical causes. The bar for flagging unexplained loss is deliberately high.'],
-                ['Transparency', 'Every analysis includes an explicit physical explanation. The system shows its work.'],
-                ['Audit Log', 'All analyses are logged immutably. Decisions can be reviewed and contested.'],
-              ].map(([title, desc]) => (
-                <div key={title} className="panel" style={{ padding: '16px 18px' }}>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--teal)', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{title}</div>
-                  <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.65 }}>{desc}</div>
-                </div>
-              ))}
-            </div>
-          </DocsSection>
-        )}
-
-        {active === 'physics' && (
-          <DocsSection title="Physics Engine">
-            <p style={bodyStyle}>
-              The Physics Truth Engine (PTE v2.1) enforces physical laws before any
-              statistical analysis. It refuses inputs that violate conservation laws.
-            </p>
-
-            <div className="section-label" style={{ marginTop: 28 }}>Key Formulas</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <FormulaBlock
-                label="Line Loss (I²R)"
-                formula="P_avg = E / t     |     I = P / (V · √3)     |     E_loss = I² · R · t"
-                note="Three-phase AC. Temperature correction applied: R(T) = R₀(1 + α(T − 20°C))"
-              />
-              <FormulaBlock
-                label="Transformer Loss"
-                formula="P_total = P_core + P_copper     |     P_copper = load² × P_rated × (1 − η)"
-                note="Includes aging factor. Core loss constant. Copper loss load-dependent."
-              />
-              <FormulaBlock
-                label="Residual"
-                formula="residual = actual_loss − expected_technical_loss"
-                note="Negative residual is physically possible (measurement error, rounding). Not flagged unless magnitude is significant."
-              />
-              <FormulaBlock
-                label="Conservation Check"
-                formula="output ≤ input × 1.001"
-                note="0.1% tolerance for measurement rounding only. Violations are REFUSED — not flagged."
-              />
-            </div>
-
-            <div className="section-label" style={{ marginTop: 28 }}>Get Engine Info</div>
-            <CodeBox
-              id="physics-endpoint"
-              code="GET /api/v1/physics/info"
-              lang="bash"
-              copy={copy}
-              copied={copied}
-            />
-          </DocsSection>
-        )}
-
-        {active === 'attribution' && (
-          <DocsSection title="Loss Attribution Model">
-            <p style={bodyStyle}>
-              The Loss Attribution Engine (LAE v2.1) uses multi-hypothesis analysis.
-              It never assigns a single cause. Every output is probability-weighted.
-            </p>
-
-            <div className="section-label" style={{ marginTop: 28 }}>Loss Causes</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {[
-                ['technical_expected', 'Normal I²R and transformer losses within tolerance'],
-                ['meter_malfunction', 'Measurement equipment error — requires calibration check'],
-                ['infrastructure_degradation', 'Aging components exhibiting increased losses'],
-                ['overload_condition', 'Operating above rated capacity'],
-                ['connection_fault', 'Loose connections or partial faults'],
-                ['environmental_factor', 'Temperature, humidity, or weather effects'],
-              ].map(([code, desc]) => (
-                <div key={code} style={{ display: 'flex', gap: 16, padding: '10px 14px', background: 'var(--bg-panel)', borderRadius: 'var(--r-sm)', border: '1px solid var(--border-subtle)' }}>
-                  <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--teal)', minWidth: 200 }}>{code}</code>
-                  <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{desc}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="section-label" style={{ marginTop: 28 }}>Conservative Mode</div>
-            <p style={{ ...bodyStyle, marginBottom: 0 }}>
-              Conservative mode (default) uses a higher confidence threshold (0.5) before attributing
-              loss to non-technical causes. Permissive mode uses 0.3. Conservative mode is always
-              preferred for operational decisions.
-            </p>
-          </DocsSection>
-        )}
-
-        {active === 'ml' && (
-          <DocsSection title="Anomaly Detection">
-            <p style={bodyStyle}>
-              Two detection methods run in parallel. Results are combined with ethics guardrails
-              applied before any output is surfaced.
-            </p>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 24 }}>
-              <div className="panel">
-                <div className="mono-label" style={{ color: 'var(--teal)', marginBottom: 10 }}>Isolation Forest</div>
-                <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.65 }}>
-                  Trained on synthetic grid data (1000 samples, 5% contamination rate).
-                  Scores readings against historical baseline. Threshold: 0.35.
-                </p>
-              </div>
-              <div className="panel">
-                <div className="mono-label" style={{ color: 'var(--blue)', marginBottom: 10 }}>Statistical (Z-Score)</div>
-                <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.65 }}>
-                  Maintains rolling history. Flags readings beyond 2.5 standard deviations
-                  from the mean. Active after 50+ observations.
-                </p>
-              </div>
-            </div>
-
-            <div className="section-label" style={{ marginTop: 28 }}>Ethics Guardrails</div>
-            <CodeBox
-              id="ethics-constants"
-              code={`{\n  "individual_tracking": false,\n  "accusation_output": false,\n  "requires_human_review": true,\n  "min_confidence_for_flag": 0.35\n}`}
-              lang="json"
-              copy={copy}
-              copied={copied}
-            />
-          </DocsSection>
-        )}
-
-        {active === 'api' && (
-          <DocsSection title="API Reference">
-            <p style={bodyStyle}>
-              Base URL:{' '}
-              <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--teal)' }}>
-                {process.env.NEXT_PUBLIC_API_URL || 'https://your-backend.onrender.com'}
-              </code>
-            </p>
-
-            {[
-              {
-                method: 'GET', endpoint: '/health', id: 'ep-health',
-                desc: 'Returns system health, uptime, and component status.',
-              },
-              {
-                method: 'GET', endpoint: '/metrics', id: 'ep-metrics',
-                desc: 'Prometheus-format metrics. Request counts, latency, error rates.',
-              },
-              {
-                method: 'GET', endpoint: '/api/v1/physics/info', id: 'ep-physics',
-                desc: 'Returns physics engine parameters and configuration.',
-              },
-              {
-                method: 'POST', endpoint: '/api/v1/analysis/validate', id: 'ep-validate',
-                desc: 'Run a full grid section analysis. Returns balance status, confidence, and attribution.',
-              },
-              {
-                method: 'POST', endpoint: '/api/v1/analysis/detect-anomaly', id: 'ep-anomaly',
-                desc: 'Run anomaly detection on a single reading.',
-              },
-              {
-                method: 'POST', endpoint: '/api/v1/auth/register', id: 'ep-register',
-                desc: 'Register a new user account.',
-              },
-              {
-                method: 'POST', endpoint: '/api/v1/auth/login', id: 'ep-login',
-                desc: 'Authenticate and receive a JWT token.',
-              },
-            ].map(({ method, endpoint, id, desc }) => (
-              <div key={id} style={{ marginBottom: 12, padding: '14px 18px', background: 'var(--bg-panel)', borderRadius: 'var(--r-md)', border: '1px solid var(--border-subtle)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                  <span style={{
-                    fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.06em',
-                    padding: '3px 8px', borderRadius: 4,
-                    color: method === 'GET' ? 'var(--blue)' : 'var(--teal)',
-                    background: method === 'GET' ? 'var(--blue-dim)' : 'var(--teal-dim)',
-                    border: `1px solid ${method === 'GET' ? 'rgba(58,141,255,0.25)' : 'rgba(0,245,196,0.25)'}`,
-                  }}>{method}</span>
-                  <code style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-primary)' }}>{endpoint}</code>
-                </div>
-                <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: 0 }}>{desc}</p>
-              </div>
-            ))}
-
-            <div className="section-label" style={{ marginTop: 28 }}>Example Request</div>
-            <CodeBox
-              id="example-request"
-              code={`curl -X POST ${process.env.NEXT_PUBLIC_API_URL || 'https://your-backend.onrender.com'}/api/v1/analysis/validate \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "substation_id": "SUB001",
-    "input_energy_mwh": 1000,
-    "output_energy_mwh": 975,
-    "components": [{
-      "component_id": "TX001",
-      "component_type": "transformer",
-      "rated_capacity_kva": 1000,
-      "efficiency_rating": 0.98,
-      "age_years": 10
-    }]
-  }'`}
-              lang="bash"
-              copy={copy}
-              copied={copied}
-            />
-          </DocsSection>
-        )}
-
-        {active === 'auth' && (
-          <DocsSection title="Authentication">
-            <p style={bodyStyle}>
-              JWT-based authentication with role-based access control (RBAC).
-              Three roles: <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--teal)' }}>admin</code>,{' '}
-              <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--teal)' }}>analyst</code>,{' '}
-              <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--teal)' }}>viewer</code>.
-            </p>
-
-            <div className="section-label" style={{ marginTop: 28 }}>Role Hierarchy</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {[
-                ['admin (3)', 'Full access. User management. Audit log access.'],
-                ['analyst (2)', 'Run analyses. Create grid sections. View all results.'],
-                ['viewer (1)', 'Read-only. View analyses and system status.'],
-              ].map(([role, desc]) => (
-                <div key={role} style={{ display: 'flex', gap: 16, padding: '10px 14px', background: 'var(--bg-panel)', borderRadius: 'var(--r-sm)', border: '1px solid var(--border-subtle)' }}>
-                  <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--teal)', minWidth: 120 }}>{role}</code>
-                  <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{desc}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="section-label" style={{ marginTop: 28 }}>Login</div>
-            <CodeBox
-              id="auth-login"
-              code={`curl -X POST ${process.env.NEXT_PUBLIC_API_URL || 'https://your-backend.onrender.com'}/api/v1/auth/login \\
-  -H "Content-Type: application/json" \\
-  -d '{"email": "analyst@example.com", "password": "your-password"}'`}
-              lang="bash"
-              copy={copy}
-              copied={copied}
-            />
-
-            <div className="section-label" style={{ marginTop: 20 }}>Authenticated Request</div>
-            <CodeBox
-              id="auth-use"
-              code={`curl /api/v1/analysis/list \\
-  -H "Authorization: Bearer <your-token>"`}
-              lang="bash"
-              copy={copy}
-              copied={copied}
-            />
-          </DocsSection>
-        )}
-      </div>
-    </div>
-  )
-}
-
-const bodyStyle: React.CSSProperties = {
-  fontSize: 14,
-  color: 'var(--text-secondary)',
-  lineHeight: 1.75,
-  marginBottom: 24,
-}
-
-function DocsSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 400, letterSpacing: '-0.02em', color: 'var(--text-primary)', marginTop: 0, marginBottom: 24 }}>
-        {title}
-      </h2>
-      {children}
-    </div>
-  )
-}
-
-function FormulaBlock({ label, formula, note }: { label: string; formula: string; note: string }) {
-  return (
-    <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-md)', overflow: 'hidden' }}>
-      <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--teal)' }}>{label}</span>
-      </div>
-      <div style={{ padding: '12px 16px' }}>
-        <div className="code-block" style={{ border: 'none', background: 'transparent', padding: '4px 0', marginBottom: 8, fontSize: 13 }}>
-          {formula}
+      {/* Mobile tab bar */}
+      <div className="show-mobile" style={{ width: '100%' }}>
+        <div className="tab-bar" style={{ marginBottom: 20 }}>
+          {NAV.flatMap(g => g.items).map(({ id, label }) => (
+            <button key={id} className={`tab-btn ${active === id ? 'active' : ''}`} onClick={() => setActive(id)}>
+              {label}
+            </button>
+          ))}
         </div>
-        <div style={{ fontSize: 11.5, color: 'var(--text-dim)', fontFamily: 'var(--font-body)' }}>{note}</div>
       </div>
-    </div>
-  )
-}
 
-function CodeBox({ id, code, lang, copy, copied }: { id: string; code: string; lang: string; copy: (text: string, id: string) => void; copied: string | null }) {
-  return (
-    <div style={{ position: 'relative' }}>
-      <button
-        onClick={() => copy(code, id)}
-        style={{
-          position: 'absolute', top: 10, right: 10, zIndex: 1,
-          background: 'var(--bg-elevated)', border: '1px solid var(--border-dim)',
-          borderRadius: 'var(--r-sm)', padding: '4px 10px',
-          fontFamily: 'var(--font-mono)', fontSize: 9.5,
-          color: copied === id ? 'var(--teal)' : 'var(--text-secondary)',
-          cursor: 'pointer', letterSpacing: '0.06em', textTransform: 'uppercase',
-        }}
-      >
-        {copied === id ? '✓ Copied' : 'Copy'}
-      </button>
-      <pre className="code-block" style={{ margin: 0 }}>
-        <code>{code}</code>
-      </pre>
+      {/* Content */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="page-header fade-in">
+          <div className="page-eyebrow">Documentation</div>
+          <h1 className="page-title">{section.title}</h1>
+        </div>
+        <div className="fade-in" key={active}>
+          {section.body}
+        </div>
+      </div>
     </div>
   )
 }
