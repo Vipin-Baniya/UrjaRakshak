@@ -8,11 +8,10 @@ Compatible with:
 - Render deployment
 - SQLAlchemy Async + asyncpg
 
-Key fixes:
-- Disable prepared statement cache (PgBouncer compatibility)
-- SSL enabled automatically for Supabase
-- AsyncAdaptedQueuePool for production
-- NullPool for development
+Fixes:
+- Disable prepared statements (PgBouncer compatibility)
+- Enable SSL automatically for Supabase
+- NullPool used with Supabase (Supabase already has pooling)
 """
 
 import logging
@@ -26,7 +25,7 @@ from sqlalchemy.ext.asyncio import (
     AsyncEngine,
 )
 from sqlalchemy.orm import declarative_base
-from sqlalchemy.pool import NullPool, AsyncAdaptedQueuePool
+from sqlalchemy.pool import NullPool
 from sqlalchemy import text
 
 from app.config import settings
@@ -49,7 +48,7 @@ def _build_database_url() -> tuple[str, bool]:
 
     is_supabase = ".supabase.co" in url
 
-    # remove sslmode from url
+    # remove sslmode query if present
     url = re.sub(r"[?&]sslmode=[^&]*", "", url).rstrip("?&")
 
     return url, is_supabase
@@ -68,40 +67,24 @@ def create_database_engine() -> AsyncEngine:
 
     if is_supabase:
 
-        connect_args["ssl"] = "require"
-
-        # ⭐ critical fix for PgBouncer
-        connect_args["statement_cache_size"] = 0
+        connect_args = {
+            "ssl": "require",
+            "statement_cache_size": 0,
+            "prepared_statement_cache_size": 0,
+        }
 
         logger.info(
             "Supabase detected → SSL enabled, prepared statements disabled"
         )
 
-    if settings.is_development:
+    engine = create_async_engine(
+        database_url,
+        echo=settings.DEBUG,
+        poolclass=NullPool,  # ⭐ Required for Supabase PgBouncer
+        connect_args=connect_args,
+    )
 
-        engine = create_async_engine(
-            database_url,
-            echo=settings.DEBUG,
-            poolclass=NullPool,
-            connect_args=connect_args,
-        )
-
-        logger.info("DB engine → NullPool (development)")
-
-    else:
-
-        engine = create_async_engine(
-            database_url,
-            echo=False,
-            poolclass=AsyncAdaptedQueuePool,
-            pool_size=10,
-            max_overflow=5,
-            pool_timeout=30,
-            pool_pre_ping=True,
-            connect_args=connect_args,
-        )
-
-        logger.info("DB engine → AsyncAdaptedQueuePool (production)")
+    logger.info("Database engine created (asyncpg + NullPool)")
 
     return engine
 
@@ -125,7 +108,7 @@ Base = declarative_base()
 
 
 # ─────────────────────────────────────────────
-# Dependency
+# DB dependency
 # ─────────────────────────────────────────────
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -141,7 +124,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 # ─────────────────────────────────────────────
-# Health check
+# DB health check
 # ─────────────────────────────────────────────
 
 async def check_database_connection() -> bool:
@@ -149,7 +132,6 @@ async def check_database_connection() -> bool:
     try:
         async with engine.begin() as conn:
             await conn.execute(text("SELECT 1"))
-
         return True
 
     except Exception as e:
@@ -165,24 +147,11 @@ async def get_database_info():
             result = await conn.execute(text("SELECT version()"))
             version = result.scalar() or "unknown"
 
-        pool = engine.pool
-
-        pool_status = {}
-
-        for attr in ("size", "checkedin", "checkedout", "overflow"):
-            fn = getattr(pool, attr, None)
-            if callable(fn):
-                try:
-                    pool_status[attr] = fn()
-                except Exception:
-                    pass
-
         return {
             "connected": True,
             "supabase": is_supabase,
             "ssl": is_supabase,
             "version": version.split(",")[0],
-            "pool": pool_status,
             "driver": database_url.split("://")[0],
         }
 
@@ -197,7 +166,7 @@ async def get_database_info():
 
 
 # ─────────────────────────────────────────────
-# DB init
+# Initialize DB tables
 # ─────────────────────────────────────────────
 
 async def init_db():
@@ -207,7 +176,7 @@ async def init_db():
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
-        logger.info("✅ Database tables created/verified")
+        logger.info("✅ Database tables created / verified")
 
     except Exception as e:
 
