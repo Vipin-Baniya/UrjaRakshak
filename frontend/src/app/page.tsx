@@ -4,163 +4,132 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
 export default function Home() {
-  const [confWidth, setConfWidth] = useState(0)
+  const [ghiScore, setGhiScore] = useState<number | null>(null)
+  const [backendOk, setBackendOk] = useState<boolean | null>(null)
 
-  // Animate confidence bar on mount
   useEffect(() => {
-    const t = setTimeout(() => setConfWidth(95), 600)
-    return () => clearTimeout(t)
+    const base = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '')
+    fetch(`${base}/health`)
+      .then(r => { setBackendOk(r.ok); return r.json() })
+      .catch(() => setBackendOk(false))
+    fetch(`${base}/api/v1/ai/ghi/dashboard`)
+      .then(r => r.json())
+      .then(d => { if (d?.avg_ghi_all_time != null) setGhiScore(d.avg_ghi_all_time) })
+      .catch(() => {})
   }, [])
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto', padding: '80px 40px 0' }}>
+    <div style={{ maxWidth: 1200, margin: '0 auto', padding: 'clamp(48px,6vw,80px) var(--page-pad-x) 0' }}>
 
-      {/* ── Hero ─────────────────────────────────────────────────────── */}
-      <section style={{ paddingTop: 60, paddingBottom: 80 }}>
-        <div className="afu afu-1" style={{ marginBottom: 20 }}>
-          <span className="mono-label" style={{ color: 'var(--teal)', letterSpacing: '0.12em' }}>
-            v2.1 — Physics Truth Engine Active
+      {/* Hero */}
+      <section style={{ paddingBottom: 72 }}>
+        <div className="fade-in stagger-1" style={{ marginBottom: 18 }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--cyan)' }}>
+            v2.3 — Physics Truth Engine Active
           </span>
         </div>
 
-        <h1 className="display-heading afu afu-2" style={{ marginBottom: 24, maxWidth: 760 }}>
+        <h1 className="fade-in stagger-2" style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: 'clamp(32px, 5vw, 60px)',
+          fontWeight: 400,
+          letterSpacing: '-0.02em',
+          lineHeight: 1.08,
+          color: 'var(--text-primary)',
+          maxWidth: 760,
+          marginBottom: 24,
+        }}>
           Grid Intelligence<br />
-          Meets <em>Thermodynamics</em>
+          Meets <em style={{ fontStyle: 'italic', color: 'var(--cyan)' }}>Thermodynamics</em>
         </h1>
 
-        <p className="afu afu-3" style={{
-          fontSize: 17,
-          color: 'var(--text-secondary)',
-          maxWidth: 540,
-          marginBottom: 40,
-          lineHeight: 1.7,
+        <p className="fade-in stagger-3" style={{
+          fontSize: 17, color: 'var(--text-secondary)',
+          maxWidth: 540, marginBottom: 40, lineHeight: 1.7,
         }}>
           A physics-grounded system for energy integrity analysis.
+          First Law of Thermodynamics as ground truth, not heuristics.
           Designed for transparency, explainability, and human oversight.
         </p>
 
-        <div className="afu afu-4" style={{ display: 'flex', gap: 12, marginBottom: 72 }}>
-          <Link href="/dashboard" className="btn-primary">
-            Launch Dashboard →
-          </Link>
-          <Link href="/docs" className="btn-secondary">
-            Documentation
-          </Link>
+        <div className="fade-in stagger-4" style={{ display: 'flex', gap: 12, marginBottom: 64, flexWrap: 'wrap' }}>
+          <Link href="/dashboard" className="btn btn-primary btn-lg">Launch Dashboard →</Link>
+          <Link href="/upload" className="btn btn-secondary btn-lg">Upload Data</Link>
+          <Link href="/docs" className="btn btn-secondary btn-lg">Documentation</Link>
         </div>
 
-        {/* Integrity metrics */}
-        <div className="afu afu-5">
-          <div className="section-label">System Integrity Status</div>
-          <div className="integrity-grid">
-            <div className="integrity-cell">
-              <div className="integrity-cell-lbl">Physics Integrity</div>
-              <div className="integrity-cell-val">VERIFIED</div>
-            </div>
-            <div className="integrity-cell">
-              <div className="integrity-cell-lbl">Uncertainty Bound</div>
-              <div className="integrity-cell-val">± 1.0 %</div>
-            </div>
-            <div className="integrity-cell">
-              <div className="integrity-cell-lbl">Attribution Engine</div>
-              <div className="integrity-cell-val">CONSERVATIVE</div>
-            </div>
-            <div className="integrity-cell">
-              <div className="integrity-cell-lbl">Review Layer</div>
-              <div className="integrity-cell-val">HUMAN REQUIRED</div>
-            </div>
+        {/* Live status strip */}
+        <div className="fade-in stagger-5" style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className={`live-pill ${backendOk === null ? '' : backendOk ? 'online' : 'offline'}`}>
+            <span className="live-dot" />
+            Backend {backendOk === null ? 'connecting' : backendOk ? 'online' : 'offline'}
           </div>
+          {ghiScore !== null && (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>
+              Fleet GHI: <span style={{ color: ghiScore >= 70 ? 'var(--green)' : ghiScore >= 50 ? 'var(--amber)' : 'var(--red)', fontWeight: 500 }}>{ghiScore}</span>
+            </div>
+          )}
         </div>
       </section>
 
-      {/* ── Principles ────────────────────────────────────────────────── */}
-      <section style={{ paddingBottom: 80 }}>
-        <div className="section-label">Core Design Principles</div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-          <PrincipleCard
-            tag="01 / Physics"
-            title="Conservation Laws First"
-            body="Every analysis is grounded in thermodynamics and electrical engineering. I²R losses. Transformer physics. Uncertainty quantification. No shortcuts."
-          />
-          <PrincipleCard
-            tag="02 / Ethics"
-            title="Multi-Hypothesis Attribution"
-            body="Never single-cause. Probability-weighted analysis with explicit uncertainty. Infrastructure protection without individual surveillance."
-          />
-          <PrincipleCard
-            tag="03 / Oversight"
-            title="Human Review Required"
-            body="The system flags. It does not accuse. All anomaly results require human review before any action. Explainable outputs only."
-          />
+      {/* Principles */}
+      <section style={{ paddingBottom: 72, borderTop: '1px solid var(--border-subtle)', paddingTop: 48 }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 32 }}>
+          Design Principles
+        </div>
+        <div className="grid-4">
+          {[
+            { icon: '⚛', title: 'Physics-first', desc: 'Every result is grounded in First-Law thermodynamics. The engine refuses to output when confidence is insufficient.' },
+            { icon: '🔍', title: 'Explainable', desc: 'Every formula is documented. Fourier decomposition shown. No black-box outputs. Engineers can verify every calculation.' },
+            { icon: '🛡', title: 'Hard to game', desc: '3-gate anomaly logic: physics gate + Z-score + Isolation Forest. All three must agree before flagging.' },
+            { icon: '⚖', title: 'Ethics-aware', desc: 'No individual attribution. Infrastructure-scope only. SHA-256 audit chain on every action.' },
+          ].map(p => (
+            <div key={p.title} className="panel" style={{ background: 'var(--bg-panel)' }}>
+              <div style={{ fontSize: 24, marginBottom: 12 }}>{p.icon}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>{p.title}</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65 }}>{p.desc}</div>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* ── Confidence indicator ─────────────────────────────────────── */}
-      <section style={{ paddingBottom: 80 }}>
-        <div className="section-label">Engine Confidence — Baseline Reading</div>
-
-        <div className="panel" style={{ maxWidth: 560 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-            <span className="mono-label">Analysis Confidence Score</span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 32, fontWeight: 300, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
-              95<span style={{ fontSize: 16, color: 'var(--text-dim)' }}>%</span>
-            </span>
-          </div>
-          <div className="conf-track">
-            <div className="conf-fill" style={{ width: `${confWidth}%` }} />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-            <span className="timestamp">Physics Truth Engine v2.1</span>
-            <span className="chip chip-ok">Within Bounds</span>
-          </div>
+      {/* Stack */}
+      <section style={{ paddingBottom: 72, borderTop: '1px solid var(--border-subtle)', paddingTop: 48 }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 32 }}>
+          What's inside
+        </div>
+        <div className="grid-3">
+          {[
+            { label: 'Physics Truth Engine', sub: 'PTE v2.1', desc: 'First-law thermodynamics. I²R losses per component. Temperature-corrected resistance. Uncertainty quantification.' },
+            { label: 'Grid Health Index', sub: 'GHI — 0 to 100', desc: 'Composite score: PBS×35% + ASS×20% + CS×15% + TSS×15% + DIS×15%. Classifies HEALTHY → SEVERE.' },
+            { label: 'Anomaly Detection', sub: 'IF + Z-Score ensemble', desc: 'Isolation Forest trained on synthetic grid data. Statistical z-score gate. Per-meter rolling baselines.' },
+            { label: 'Transformer Aging', sub: 'IEC 60076-7', desc: 'Arrhenius thermal aging model. Hot-spot temperature, aging factor V, failure probability over 12 months.' },
+            { label: 'Drift Detection', sub: 'PSI + K-S test', desc: 'Population Stability Index and Kolmogorov-Smirnov test detect when the ML model has become stale.' },
+            { label: 'Live Streaming', sub: 'SSE — no Redis', desc: 'Server-Sent Events with in-memory queues per substation. Per-meter stability scores updated on every event.' },
+          ].map(s => (
+            <div key={s.label} className="panel">
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--cyan)', marginBottom: 6, letterSpacing: '0.04em' }}>{s.sub}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>{s.label}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.65 }}>{s.desc}</div>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* ── Architecture ─────────────────────────────────────────────── */}
-      <section style={{ paddingBottom: 80 }}>
-        <div className="section-label">System Architecture</div>
-        <div className="panel panel-elevated">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'wrap' }}>
-            {[
-              'Physics Input Validation',
-              'Energy Conservation Check',
-              'I²R + Transformer Loss Model',
-              'Residual Attribution',
-              'ML Anomaly Detection',
-              'Human Review Layer',
-            ].map((step, i, arr) => (
-              <div key={step} style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{
-                  padding: '10px 18px',
-                  borderRadius: 'var(--r-sm)',
-                  background: i % 2 === 0 ? 'var(--teal-dim)' : 'rgba(58,141,255,0.08)',
-                  border: `1px solid ${i % 2 === 0 ? 'rgba(0,245,196,0.2)' : 'rgba(58,141,255,0.15)'}`,
-                }}>
-                  <div className="mono-label" style={{ marginBottom: 0, color: i % 2 === 0 ? 'var(--teal)' : 'var(--blue)' }}>{step}</div>
-                </div>
-                {i < arr.length - 1 && (
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)', padding: '0 10px' }}>→</span>
-                )}
-              </div>
-            ))}
-          </div>
+      {/* CTA */}
+      <section style={{ paddingBottom: 80, borderTop: '1px solid var(--border-subtle)', paddingTop: 48, textAlign: 'center' }}>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(22px, 3vw, 34px)', fontWeight: 400, marginBottom: 16 }}>
+          Start with sample data
+        </h2>
+        <p style={{ fontSize: 14, color: 'var(--text-secondary)', maxWidth: 480, margin: '0 auto 28px', lineHeight: 1.7 }}>
+          Upload the included sample CSV and see physics validation, anomaly detection, and GHI scoring in action in under 2 minutes.
+        </p>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <Link href="/upload" className="btn btn-primary btn-lg">Upload Sample CSV →</Link>
+          <Link href="/dashboard" className="btn btn-secondary btn-lg">View Dashboard</Link>
         </div>
       </section>
 
-    </div>
-  )
-}
-
-function PrincipleCard({ tag, title, body }: { tag: string; title: string; body: string }) {
-  return (
-    <div className="panel" style={{ cursor: 'default' }}>
-      <div className="mono-label" style={{ color: 'var(--teal)', marginBottom: 12 }}>{tag}</div>
-      <h3 style={{ fontFamily: 'var(--font-body)', fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 12, letterSpacing: '-0.01em', lineHeight: 1.3 }}>
-        {title}
-      </h3>
-      <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 }}>
-        {body}
-      </p>
     </div>
   )
 }
