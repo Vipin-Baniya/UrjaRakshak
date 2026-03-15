@@ -61,7 +61,7 @@ export default function InspectionsPage() {
   const openDetail = (item: Inspection) => {
     setSelected(item)
     setFindings(item.findings || '')
-    setResolution(item.resolution_code || '')
+    setResolution(item.resolution_notes || item.resolution || '')
     setNewStatus(item.status)
     setUpdateMsg('')
   }
@@ -71,7 +71,7 @@ export default function InspectionsPage() {
     setSaving(true)
     setUpdateMsg('')
     try {
-      await inspectionApi.update(selected.id, { findings, resolution_code: resolution, status: newStatus })
+      await inspectionApi.update(selected.id, { findings, resolution_notes: resolution, status: newStatus })
       setUpdateMsg('✓ Saved')
       fetchAll()
       setTimeout(() => setSelected(null), 800)
@@ -111,19 +111,23 @@ export default function InspectionsPage() {
         <div className="grid-4 fade-in stagger-1" style={{ marginBottom: 20 }}>
           <div className="metric-card">
             <div className="metric-label">Open</div>
-            <div className="metric-value" style={{ color: stats.open > 0 ? 'var(--amber)' : 'var(--green)' }}>{stats.open}</div>
+            <div className="metric-value" style={{ color: (stats.by_status?.OPEN ?? 0) > 0 ? 'var(--amber)' : 'var(--green)' }}>
+              {stats.by_status?.OPEN ?? 0}
+            </div>
           </div>
           <div className="metric-card">
             <div className="metric-label">Critical / High</div>
-            <div className="metric-value" style={{ color: stats.critical_open > 0 ? 'var(--red)' : 'var(--cyan)' }}>{stats.critical_open}</div>
+            <div className="metric-value" style={{ color: stats.critical_open > 0 ? 'var(--red)' : 'var(--cyan)' }}>
+              {stats.critical_open}
+            </div>
           </div>
           <div className="metric-card">
             <div className="metric-label">In Progress</div>
-            <div className="metric-value">{stats.in_progress}</div>
+            <div className="metric-value">{stats.by_status?.IN_PROGRESS ?? 0}</div>
           </div>
           <div className="metric-card">
             <div className="metric-label">Resolved</div>
-            <div className="metric-value" style={{ color: 'var(--green)' }}>{stats.resolved}</div>
+            <div className="metric-value" style={{ color: 'var(--green)' }}>{stats.by_status?.RESOLVED ?? 0}</div>
           </div>
         </div>
       )}
