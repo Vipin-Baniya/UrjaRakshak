@@ -130,7 +130,6 @@ export default function GovernancePage() {
                   <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 }}>{drift.interpretation}</p>
                 </div>
               )}
-              )}
             </div>
           ) : (
             <div className="panel">
