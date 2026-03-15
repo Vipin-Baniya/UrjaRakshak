@@ -363,9 +363,10 @@ async def seed(n_substations: int, n_days: int, reset: bool):
         log.info("Seed complete.")
 
         # Summary
-        total_a = (await db.execute("SELECT COUNT(*) FROM analyses")).scalar()
-        total_g = (await db.execute("SELECT COUNT(*) FROM grid_health_snapshots")).scalar()
-        total_i = (await db.execute("SELECT COUNT(*) FROM inspections")).scalar()
+        from sqlalchemy import text as sql_text
+        total_a = (await db.execute(sql_text("SELECT COUNT(*) FROM analyses"))).scalar()
+        total_g = (await db.execute(sql_text("SELECT COUNT(*) FROM grid_health_snapshots"))).scalar()
+        total_i = (await db.execute(sql_text("SELECT COUNT(*) FROM inspections"))).scalar()
         print("\n" + "="*50)
         print("✅  Demo data seeded successfully")
         print(f"   Substations : {n_substations}")
