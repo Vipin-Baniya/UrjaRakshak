@@ -23,7 +23,7 @@ export default function GovernancePage() {
   const loadDrift = useCallback(async () => {
     setLoading(true); setTabError(null)
     try {
-      const d = await governanceApi.getDrift('SS001')
+      const d = await governanceApi.checkDrift()
       setDrift(d)
     } catch (e: any) {
       setTabError(e.message?.includes('401') ? 'Login required — authenticate via Upload page first.' : e.message)
@@ -45,10 +45,10 @@ export default function GovernancePage() {
     try {
       const [log, valid] = await Promise.all([
         governanceApi.getAuditLog(50),
-        governanceApi.verifyAuditChain().catch(() => null),
+        governanceApi.verifyChain().catch(() => null),
       ])
       setAuditLog(log.entries || [])
-      setChainOk(valid?.valid ?? null)
+      setChainOk(valid?.verified ?? null)
     } catch (e: any) {
       setTabError(e.message?.includes('401') ? 'Login required.' : e.message)
     } finally { setLoading(false) }
@@ -64,7 +64,7 @@ export default function GovernancePage() {
     if (!agingForm.substation_id.trim()) return
     setAgingLoading(true)
     try {
-      const r = await governanceApi.runTransformerAging(agingForm)
+      const r = await governanceApi.computeAging(agingForm)
       setAgingResult(r)
     } catch (e: any) {
       setAgingResult({ error: e.message })
@@ -111,16 +111,16 @@ export default function GovernancePage() {
                   </div>
                 </div>
                 <div className="metric-card">
-                  <div className="metric-label">Drift Score</div>
-                  <div className="metric-value">{drift.drift_score?.toFixed(3) ?? '—'}</div>
-                  <div className="metric-sub">0 = no drift</div>
+                  <div className="metric-label">PSI Score</div>
+                  <div className="metric-value">{drift.psi != null ? drift.psi.toFixed(4) : '—'}</div>
+                  <div className="metric-sub">{'<'}0.10 = stable</div>
                 </div>
                 <div className="metric-card">
-                  <div className="metric-label">Trend Direction</div>
-                  <div className="metric-value" style={{ fontSize: 24, color: drift.trend_direction === 'INCREASING' ? 'var(--red)' : drift.trend_direction === 'DECREASING' ? 'var(--green)' : 'var(--cyan)' }}>
-                    {drift.trend_direction === 'INCREASING' ? '↑' : drift.trend_direction === 'DECREASING' ? '↓' : '→'}
+                  <div className="metric-label">Anomaly Rate Shift</div>
+                  <div className="metric-value" style={{ fontSize: 24, color: drift.rate_shift > 0.05 ? 'var(--red)' : drift.rate_shift < -0.05 ? 'var(--green)' : 'var(--cyan)' }}>
+                    {drift.rate_shift > 0.05 ? '↑' : drift.rate_shift < -0.05 ? '↓' : '→'}
                   </div>
-                  <div className="metric-sub">{drift.trend_direction}</div>
+                  <div className="metric-sub">{drift.rate_shift != null ? `${(drift.rate_shift * 100).toFixed(1)}%` : '—'}</div>
                 </div>
               </div>
 
@@ -130,19 +130,6 @@ export default function GovernancePage() {
                   <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 }}>{drift.interpretation}</p>
                 </div>
               )}
-
-              {drift.recommended_actions?.length > 0 && (
-                <div className="panel">
-                  <div className="sec-label accent">Recommended Actions</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {drift.recommended_actions.map((a: string, i: number) => (
-                      <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                        <span style={{ color: 'var(--cyan)', fontFamily: 'var(--font-mono)', fontSize: 11, marginTop: 1, flexShrink: 0 }}>{i + 1}.</span>
-                        <span style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{a}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               )}
             </div>
           ) : (
@@ -172,23 +159,25 @@ export default function GovernancePage() {
                     <tr>
                       <th>Transformer</th>
                       <th>Condition</th>
-                      <th className="hide-mobile">Age</th>
+                      <th className="hide-mobile">Est. Life Left</th>
                       <th className="hide-mobile">Health Index</th>
                       <th>Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {fleet.transformers.slice(0, 15).map((t: any, i: number) => (
+                    {fleet.transformers?.slice(0, 15).map((t: any, i: number) => (
                       <tr key={i}>
                         <td style={{ color: 'var(--cyan)' }}>{t.transformer_tag}</td>
                         <td>
-                          <span style={{ color: CONDITION_COLORS[t.condition] || 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                            {t.condition}
+                          <span style={{ color: CONDITION_COLORS[t.condition_class] || 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            {t.condition_class}
                           </span>
                         </td>
-                        <td className="hide-mobile">{t.age_years ? `${t.age_years.toFixed(1)} yr` : '—'}</td>
+                        <td className="hide-mobile">{t.estimated_rul_years != null ? `${t.estimated_rul_years.toFixed(1)} yr` : '—'}</td>
                         <td className="hide-mobile">{t.health_index != null ? `${(t.health_index * 100).toFixed(0)}%` : '—'}</td>
-                        <td style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>{t.recommended_action || '—'}</td>
+                        <td style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>
+                          {t.replacement_flag ? 'Replace' : t.maintenance_flag ? 'Maintenance' : 'Monitor'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -207,6 +196,10 @@ export default function GovernancePage() {
                   <input className="input" value={agingForm.substation_id} onChange={e => setAgingForm(f => ({ ...f, substation_id: e.target.value }))} placeholder="SS001" />
                 </div>
                 <div>
+                  <label style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-tertiary)', display: 'block', marginBottom: 6 }}>Transformer Tag *</label>
+                  <input className="input" value={agingForm.transformer_tag} onChange={e => setAgingForm(f => ({ ...f, transformer_tag: e.target.value }))} placeholder="TX-01" />
+                </div>
+                <div>
                   <label style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-tertiary)', display: 'block', marginBottom: 6 }}>Install Year</label>
                   <input className="input" type="number" value={agingForm.install_year} onChange={e => setAgingForm(f => ({ ...f, install_year: parseInt(e.target.value) }))} min={1970} max={2030} />
                 </div>
@@ -222,20 +215,22 @@ export default function GovernancePage() {
                 </div>
               </div>
             </div>
-            <button onClick={runAging} disabled={agingLoading || !agingForm.substation_id.trim()} className="btn btn-primary">
+            <button onClick={runAging} disabled={agingLoading || !agingForm.substation_id.trim() || !agingForm.transformer_tag.trim()} className="btn btn-primary">
               {agingLoading ? 'Computing…' : 'Run Aging Analysis'}
             </button>
 
             {agingResult && !agingResult.error && (
               <div className="panel panel-elevated" style={{ marginTop: 16 }}>
                 <div className="grid-3">
-                  <div><div className="metric-label">Condition</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, color: CONDITION_COLORS[agingResult.condition] || 'var(--cyan)' }}>{agingResult.condition}</div></div>
+                  <div><div className="metric-label">Condition</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, color: CONDITION_COLORS[agingResult.condition_class] || 'var(--cyan)' }}>{agingResult.condition_class}</div></div>
                   <div><div className="metric-label">Health Index</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, color: 'var(--cyan)' }}>{agingResult.health_index != null ? `${(agingResult.health_index * 100).toFixed(0)}%` : '—'}</div></div>
-                  <div><div className="metric-label">Remaining Life</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, color: 'var(--cyan)' }}>{agingResult.remaining_life_years != null ? `${agingResult.remaining_life_years.toFixed(1)} yr` : '—'}</div></div>
+                  <div><div className="metric-label">Remaining Life</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, color: 'var(--cyan)' }}>{agingResult.estimated_rul_years != null ? `${agingResult.estimated_rul_years.toFixed(1)} yr` : '—'}</div></div>
                 </div>
-                {agingResult.interpretation && (
-                  <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 14, marginBottom: 0 }}>{agingResult.interpretation}</p>
-                )}
+                <div style={{ marginTop: 12, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                  {agingResult.replacement_flag && <div style={{ color: 'var(--red)' }}>⚠ Replacement recommended</div>}
+                  {!agingResult.replacement_flag && agingResult.maintenance_flag && <div style={{ color: 'var(--amber)' }}>⚠ Maintenance required</div>}
+                  {!agingResult.replacement_flag && !agingResult.maintenance_flag && <div style={{ color: 'var(--green)' }}>✓ Within normal operating parameters</div>}
+                </div>
               </div>
             )}
             {agingResult?.error && <div className="alert alert-err" style={{ marginTop: 12 }}>{agingResult.error}</div>}
@@ -279,14 +274,14 @@ export default function GovernancePage() {
                   <tbody>
                     {auditLog.slice(0, 30).map((entry: any, i: number) => (
                       <tr key={i}>
-                        <td style={{ color: 'var(--cyan)' }}>{entry.action_type}</td>
+                        <td style={{ color: 'var(--cyan)' }}>{entry.event_type}</td>
                         <td className="hide-mobile">{entry.substation_id || '—'}</td>
-                        <td className="hide-mobile" style={{ color: 'var(--text-tertiary)' }}>{entry.user_id?.slice(0, 8) || '—'}</td>
+                        <td className="hide-mobile" style={{ color: 'var(--text-tertiary)' }}>{entry.user_email?.split('@')[0] || '—'}</td>
                         <td style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>
-                          {entry.hash?.slice(0, 12)}…
+                          {entry.entry_hash?.slice(0, 12)}…
                         </td>
                         <td style={{ color: 'var(--text-dim)' }}>
-                          {entry.created_at ? new Date(entry.created_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                          {entry.recorded_at ? new Date(entry.recorded_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
                         </td>
                       </tr>
                     ))}
