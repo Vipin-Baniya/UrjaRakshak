@@ -1,153 +1,77 @@
+# UrjaRakshak — Local Development Docker Compose
+# Usage: docker-compose up -d
+# Then seed demo data: docker-compose exec api python seed_demo_data.py
+
 version: '3.8'
 
 services:
-  # UrjaRakshak API Service
-  urjarakshak-api:
+  api:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     container_name: urjarakshak-api
     ports:
       - "8000:8000"
     environment:
-      - ENVIRONMENT=production
-      - DATABASE_URL=postgresql://urjarakshak:${DB_PASSWORD}@postgres:5432/urjarakshak
-      - REDIS_URL=redis://redis:6379/0
-      - SECRET_KEY=${SECRET_KEY}
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql+asyncpg://urjarakshak:urjarakshak@postgres:5432/urjarakshak
+      - SECRET_KEY=docker-dev-secret-change-in-production-32chars!!
       - ENABLE_STRICT_ETHICS=true
       - ENABLE_AUDIT_LOGGING=true
+      # Uncomment to enable AI interpretation:
+      # - OPENAI_API_KEY=sk-...
+      # - ANTHROPIC_API_KEY=sk-ant-...
     depends_on:
-      - postgres
-      - redis
-    volumes:
-      - ./logs:/app/logs
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     networks:
-      - urjarakshak-network
+      - urjarakshak-net
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 30s
 
-  # PostgreSQL Database
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+    container_name: urjarakshak-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - urjarakshak-net
+
   postgres:
     image: postgres:15-alpine
     container_name: urjarakshak-postgres
     environment:
       - POSTGRES_DB=urjarakshak
       - POSTGRES_USER=urjarakshak
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_PASSWORD=urjarakshak
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql
     restart: unless-stopped
     networks:
-      - urjarakshak-network
+      - urjarakshak-net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U urjarakshak"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Redis Cache
-  redis:
-    image: redis:7-alpine
-    container_name: urjarakshak-redis
-    command: redis-server --appendonly yes
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    restart: unless-stopped
-    networks:
-      - urjarakshak-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Frontend Dashboard (React)
-  urjarakshak-frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: urjarakshak-frontend
-    ports:
-      - "3000:80"
-    environment:
-      - REACT_APP_API_URL=http://localhost:8000/api/v1
-    depends_on:
-      - urjarakshak-api
-    restart: unless-stopped
-    networks:
-      - urjarakshak-network
-
-  # Prometheus (Metrics)
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: urjarakshak-prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./deployment/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus-data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-    restart: unless-stopped
-    networks:
-      - urjarakshak-network
-
-  # Grafana (Visualization)
-  grafana:
-    image: grafana/grafana:latest
-    container_name: urjarakshak-grafana
-    ports:
-      - "3001:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
-      - GF_INSTALL_PLUGINS=
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./deployment/grafana/dashboards:/etc/grafana/provisioning/dashboards
-    depends_on:
-      - prometheus
-    restart: unless-stopped
-    networks:
-      - urjarakshak-network
-
-  # PgAdmin (Database Management - Optional)
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: urjarakshak-pgadmin
-    environment:
-      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL}
-      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD}
-    ports:
-      - "5050:80"
-    depends_on:
-      - postgres
-    restart: unless-stopped
-    networks:
-      - urjarakshak-network
-    profiles:
-      - debug
-
 volumes:
   postgres-data:
-    driver: local
-  redis-data:
-    driver: local
-  prometheus-data:
-    driver: local
-  grafana-data:
-    driver: local
 
 networks:
-  urjarakshak-network:
+  urjarakshak-net:
     driver: bridge
