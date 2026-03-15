@@ -7,69 +7,110 @@ import { usePathname } from 'next/navigation'
 export function CommandBar() {
   const pathname = usePathname()
   const [isLive, setIsLive] = useState<boolean | null>(null)
-  const [timestamp, setTimestamp] = useState('')
+  const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
     const apiUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '')
     fetch(`${apiUrl}/health`)
-      .then(r => r.ok ? setIsLive(true) : setIsLive(false))
+      .then(r => setIsLive(r.ok))
       .catch(() => setIsLive(false))
   }, [])
 
+  // Close drawer on route change
+  useEffect(() => { setMenuOpen(false) }, [pathname])
+
+  // Prevent body scroll when drawer open
   useEffect(() => {
-    const update = () => {
-      setTimestamp(new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC')
-    }
-    update()
-    const id = setInterval(update, 30000)
-    return () => clearInterval(id)
-  }, [])
+    document.body.style.overflow = menuOpen ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [menuOpen])
 
   const nav = [
     { href: '/',            label: 'Home' },
     { href: '/dashboard',   label: 'Dashboard' },
+    { href: '/upload',      label: 'Upload' },
     { href: '/ghi',         label: 'GHI' },
     { href: '/stream',      label: 'Live' },
     { href: '/inspections', label: 'Inspections' },
     { href: '/governance',  label: 'Governance' },
-    { href: '/upload',      label: 'Upload' },
     { href: '/docs',        label: 'Docs' },
   ]
 
+  const liveState = isLive === null ? 'checking' : isLive ? 'online' : 'offline'
+  const liveLabel = isLive === null ? 'Connecting' : isLive ? 'Online' : 'Offline'
+
   return (
-    <header className="cmd-bar">
-      <div className="cmd-bar-left">
-        <Link href="/" className="cmd-brand">
-          <div className="cmd-brand-icon">⚡</div>
-          <div className="cmd-brand-text">
-            <span className="cmd-brand-name">UrjaRakshak</span>
-            <span className="cmd-brand-sub">Physics-Based Grid Intelligence</span>
+    <>
+      <header className="nav-bar">
+        <Link href="/" className="nav-brand">
+          <div className="nav-brand-mark">⚡</div>
+          <div className="nav-brand-text">
+            <span className="nav-brand-name">UrjaRakshak</span>
+            <span className="nav-brand-sub">Grid Intelligence</span>
           </div>
         </Link>
 
-        <div className="cmd-divider" />
+        <div className="nav-divider desktop-only" />
 
-        <nav className="cmd-nav">
+        {/* Desktop nav */}
+        <nav className="nav-links">
           {nav.map(n => (
-            <Link key={n.href} href={n.href} className={pathname === n.href ? 'active' : ''}>
+            <Link
+              key={n.href}
+              href={n.href}
+              className={`nav-link ${pathname === n.href ? 'active' : ''}`}
+            >
               {n.label}
             </Link>
           ))}
         </nav>
-      </div>
 
-      <div className="cmd-bar-right">
-        {timestamp && <span className="timestamp" style={{ marginRight: 4 }}>{timestamp}</span>}
-        <span className="badge badge-strict">
-          <span style={{ letterSpacing: '0.02em' }}>⊕</span>
-          Strict Mode
-        </span>
-        <span className="badge badge-env">Production</span>
-        <div className="live-dot">
-          <span className={`live-dot-inner${isLive === false ? ' offline' : ''}`} />
-          {isLive === null ? 'Checking' : isLive ? 'Live' : 'Offline'}
+        <div className="nav-end">
+          <div className={`live-pill ${liveState} nav-status`}>
+            <span className="live-dot" />
+            {liveLabel}
+          </div>
+
+          {/* Hamburger */}
+          <button
+            className={`nav-hamburger ${menuOpen ? 'open' : ''}`}
+            onClick={() => setMenuOpen(o => !o)}
+            aria-label="Toggle menu"
+            aria-expanded={menuOpen}
+          >
+            <span /><span /><span />
+          </button>
+        </div>
+      </header>
+
+      {/* Mobile drawer */}
+      <div className={`nav-drawer ${menuOpen ? 'open' : ''}`} role="dialog" aria-label="Navigation menu">
+        {nav.map(n => (
+          <Link
+            key={n.href}
+            href={n.href}
+            className={`nav-link ${pathname === n.href ? 'active' : ''}`}
+            onClick={() => setMenuOpen(false)}
+          >
+            {n.label}
+          </Link>
+        ))}
+        <div className="nav-drawer-sep" />
+        <div className="nav-drawer-meta">
+          <div className={`live-pill ${liveState}`}>
+            <span className="live-dot" />
+            Backend {liveLabel}
+          </div>
         </div>
       </div>
-    </header>
+
+      {/* Backdrop */}
+      {menuOpen && (
+        <div
+          onClick={() => setMenuOpen(false)}
+          style={{ position:'fixed', inset:0, zIndex:998, background:'rgba(0,0,0,0.4)' }}
+        />
+      )}
+    </>
   )
 }
