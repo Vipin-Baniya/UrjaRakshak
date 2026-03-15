@@ -339,7 +339,7 @@ export default function UploadPage() {
             </div>
           )}
 
-          {result.anomaly_sample.length > 0 && (
+          {(result.anomaly_sample?.length ?? 0) > 0 && (
             <div className="panel panel-flush" style={{ marginBottom: 20 }}>
               <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
                 <div className="sec-label" style={{ marginBottom: 0 }}>Top Anomalous Readings (by Z-score)</div>
@@ -357,7 +357,7 @@ export default function UploadPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {result.anomaly_sample.map((row, i) => (
+                    {result.anomaly_sample?.map((row, i) => (
                       <tr key={i}>
                         <td style={{ color: 'var(--cyan)' }}>{row.meter_id}</td>
                         <td>{row.timestamp.replace('T', ' ').slice(0, 16)}</td>
