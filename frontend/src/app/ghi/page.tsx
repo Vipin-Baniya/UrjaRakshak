@@ -141,7 +141,7 @@ export default function GHIPage() {
               <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
                 <div className="sec-label" style={{ marginBottom: 0 }}>Recent Snapshots</div>
               </div>
-              {data.recent_snapshots && data.recent_snapshots.length > 0 ? (
+              {data.substations && data.substations.length > 0 ? (
                 <div className="table-scroll">
                   <table className="data-table">
                     <thead>
@@ -153,7 +153,7 @@ export default function GHIPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {data.recent_snapshots.slice(0, 10).map((s: any, i: number) => (
+                      {data.substations?.slice(0, 10).map((s: any, i: number) => (
                         <tr key={i}>
                           <td style={{ color: 'var(--cyan)' }}>{s.substation_id}</td>
                           <td style={{ color: GHI_COLORS[s.classification] || 'var(--cyan)', fontWeight: 500 }}>{s.ghi_score}</td>
@@ -162,7 +162,7 @@ export default function GHIPage() {
                               {s.classification}
                             </span>
                           </td>
-                          <td className="hide-mobile" style={{ color: 'var(--text-dim)' }}>{s.created_at?.slice(0, 10)}</td>
+                          <td className="hide-mobile" style={{ color: 'var(--text-dim)' }}>{s.updated_at?.slice(0, 10)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -181,11 +181,11 @@ export default function GHIPage() {
             <div className="sec-label">GHI Formula Components</div>
             <div className="grid-auto">
               {[
-                { code: 'PBS', name: 'Physics Balance Score', weight: '35%', desc: 'First-law energy conservation residual' },
-                { code: 'ASS', name: 'Anomaly Signal Score', weight: '25%', desc: 'Isolation Forest + Z-score anomaly rate' },
-                { code: 'CS', name: 'Confidence Score', weight: '20%', desc: 'Measurement quality and data completeness' },
-                { code: 'TSS', name: 'Temporal Stability', weight: '10%', desc: 'Historical trend consistency' },
-                { code: 'DIS', name: 'Drift Indicator', weight: '10%', desc: 'Long-term residual drift' },
+                { code: 'PBS', name: 'Physics Balance Score', weight: '35%', desc: 'Piecewise linear on residual %. ≤1% → 1.0, >7% → 0.' },
+                { code: 'ASS', name: 'Anomaly Stability Score', weight: '20%', desc: 'Exponential decay: exp(−10 × anomaly_rate).' },
+                { code: 'CS', name: 'Confidence Score', weight: '15%', desc: 'Measurement quality from physics engine [0,1].' },
+                { code: 'TSS', name: 'Temporal Stability', weight: '15%', desc: 'Rolling volatility of residual history.' },
+                { code: 'DIS', name: 'Data Integrity Score', weight: '15%', desc: 'Penalises missing and invalid readings.' },
               ].map(c => (
                 <div key={c.code} style={{ padding: '14px', background: 'var(--bg-elevated)', borderRadius: 'var(--r-sm)', border: '1px solid var(--border-ghost)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
