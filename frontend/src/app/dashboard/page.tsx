@@ -44,6 +44,7 @@ export default function Dashboard() {
     </div>
   )
 
+  // Backend returns residual_pct (not residual_percentage)
   const la = data?.latest_analysis
   const agg = data?.aggregates
   const components = health?.components || {}
@@ -140,8 +141,8 @@ export default function Dashboard() {
                   <StatusChip status={la.balance_status} />
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 26, fontWeight: 300, color: residualColor(la.residual_percentage), letterSpacing: '-0.02em' }}>
-                    {la.residual_percentage?.toFixed(1) ?? '—'}%
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 26, fontWeight: 300, color: residualColor(la.residual_pct), letterSpacing: '-0.02em' }}>
+                    {la.residual_pct?.toFixed(1) ?? '—'}%
                   </div>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>residual loss</div>
                 </div>
@@ -149,11 +150,11 @@ export default function Dashboard() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 12, marginBottom: 14 }}>
                 <KV label="Input" value={`${la.input_energy_mwh?.toFixed(1)} MWh`} />
                 <KV label="Output" value={`${la.output_energy_mwh?.toFixed(1)} MWh`} />
-                <KV label="Confidence" value={`${((la.confidence_score || 0) * 100).toFixed(0)}%`} />
+                <KV label="Confidence" value={`${(la.confidence_score || 0).toFixed(0)}%`} />
               </div>
               {/* Confidence bar */}
               <div style={{ height: 3, borderRadius: 2, background: 'var(--border-subtle)', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${(la.confidence_score || 0) * 100}%`, background: 'var(--cyan)', borderRadius: 2, transition: 'width 0.8s ease' }} />
+                <div style={{ height: '100%', width: `${Math.min(la.confidence_score || 0, 100)}%`, background: 'var(--cyan)', borderRadius: 2, transition: 'width 0.8s ease' }} />
               </div>
             </div>
           ) : (
@@ -271,8 +272,8 @@ export default function Dashboard() {
             <div className="panel">
               <div className="sec-label">Residual Loss Trend</div>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 64 }}>
-                {data.trend.map((t, i) => {
-                  const maxR = Math.max(...data.trend.map(x => x.residual_pct), 0.01)
+                {data.trend?.map((t, i) => {
+                  const maxR = Math.max(...(data.trend?.map(x => x.residual_pct) ?? [0.01]), 0.01)
                   const h = Math.max(4, (t.residual_pct / maxR) * 56)
                   const color = t.residual_pct > 8 ? 'var(--red)' : t.residual_pct > 3 ? 'var(--amber)' : 'var(--green)'
                   return (
@@ -293,7 +294,7 @@ export default function Dashboard() {
             {data.high_risk_substations?.length > 0 && (
               <div className="panel">
                 <div className="sec-label">High Risk</div>
-                {data.high_risk_substations.slice(0, 6).map(r => (
+                {data.high_risk_substations?.slice(0, 6).map(r => (
                   <div key={r.substation} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--border-ghost)' }}>
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>{r.substation}</span>
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--red)', fontWeight: 500 }}>{r.avg_residual_pct}%</span>
