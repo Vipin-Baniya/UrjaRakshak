@@ -4,27 +4,19 @@ import { useCallback, useEffect, useState } from 'react'
 import { inspectionApi, Inspection, InspectionStats } from '@/lib/api'
 
 const PRIORITY_COLORS: Record<string, string> = {
-  CRITICAL: 'var(--danger)',
+  CRITICAL: 'var(--red)',
   HIGH:     '#FF6B35',
-  MEDIUM:   'var(--warning)',
-  LOW:      'var(--teal)',
+  MEDIUM:   'var(--amber)',
+  LOW:      'var(--cyan)',
   INFORMATIONAL: 'var(--text-dim)',
 }
-
 const STATUS_CHIP: Record<string, string> = {
   OPEN:        'chip-err',
   IN_PROGRESS: 'chip-warn',
   RESOLVED:    'chip-ok',
-  DISMISSED:   '',
+  DISMISSED:   'chip-neutral',
 }
-
-const RESOLUTIONS = [
-  'TECHNICAL_LOSS_NORMAL',
-  'EQUIPMENT_FAULT',
-  'METER_ISSUE',
-  'DATA_QUALITY',
-  'OTHER',
-]
+const RESOLUTIONS = ['TECHNICAL_LOSS_NORMAL','EQUIPMENT_FAULT','METER_ISSUE','DATA_QUALITY','OTHER']
 
 export default function InspectionsPage() {
   const [items, setItems] = useState<Inspection[]>([])
@@ -46,11 +38,7 @@ export default function InspectionsPage() {
     setFetchError(null)
     try {
       const [listRes, statsRes] = await Promise.all([
-        inspectionApi.list({
-          status: statusFilter || undefined,
-          priority: priorityFilter || undefined,
-          limit: 50,
-        }),
+        inspectionApi.list({ status: statusFilter || undefined, priority: priorityFilter || undefined, limit: 50 }),
         inspectionApi.getStats(),
       ])
       setItems(listRes.items)
@@ -58,279 +46,272 @@ export default function InspectionsPage() {
       setStats(statsRes)
     } catch (e: any) {
       const msg = e.message || 'Failed to load inspections'
-      setFetchError(
-        msg.includes('Authentication') || msg.includes('401')
-          ? 'Session expired — please log in again via the Upload page.'
-          : msg
-      )
+      if (msg.includes('401') || msg.includes('Authentication')) {
+        setFetchError('Login required — authenticate via the Upload page first.')
+      } else {
+        setFetchError(msg)
+      }
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [statusFilter, priorityFilter])
 
   useEffect(() => { fetchAll() }, [fetchAll])
+
+  const openDetail = (item: Inspection) => {
+    setSelected(item)
+    setFindings(item.findings || '')
+    setResolution(item.resolution_code || '')
+    setNewStatus(item.status)
+    setUpdateMsg('')
+  }
 
   const handleUpdate = async () => {
     if (!selected) return
     setSaving(true)
     setUpdateMsg('')
     try {
-      const body: any = {}
-      if (newStatus)   body.status = newStatus
-      if (findings)    body.findings = findings
-      if (resolution)  body.resolution = resolution
-      const res = await inspectionApi.update(selected.id, body)
-      setSelected(res.inspection)
-      setItems(prev => prev.map(i => i.id === res.inspection.id ? res.inspection : i))
-      setUpdateMsg('✅ Updated successfully')
-      setFindings('')
-      setNewStatus('')
+      await inspectionApi.update(selected.id, { findings, resolution_code: resolution, status: newStatus })
+      setUpdateMsg('✓ Saved')
+      fetchAll()
+      setTimeout(() => setSelected(null), 800)
     } catch (e: any) {
-      setUpdateMsg(`❌ ${e.message}`)
+      setUpdateMsg(`Error: ${e.message}`)
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
-  const openInspection = (insp: Inspection) => {
-    setSelected(insp)
-    setFindings(insp.findings ?? '')
-    setNewStatus(insp.status)
-    setResolution(insp.resolution ?? '')
-    setUpdateMsg('')
-  }
+  if (loading) return (
+    <div className="loading-state" style={{ minHeight: 'calc(100vh - 120px)' }}>
+      <div className="spinner spinner-lg" />
+      <span>Loading inspections…</span>
+    </div>
+  )
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto', padding: '48px 40px' }}>
-
-      {/* Auth / Fetch Error Banner */}
-      {fetchError && (
-        <div style={{ marginBottom: 24, padding: '12px 16px', background: 'rgba(255,77,79,0.08)', border: '1px solid rgba(255,77,79,0.25)', borderRadius: 'var(--r-sm)', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--danger)' }}>
-          ⚠️ {fetchError}
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="afu afu-1" style={{ marginBottom: 36 }}>
-        <div className="mono-label" style={{ color: 'var(--teal)', marginBottom: 6 }}>Operations</div>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 34, fontWeight: 400, letterSpacing: '-0.02em', margin: '0 0 12px' }}>
-          Inspection Workflow
-        </h1>
-        <p style={{ fontSize: 14, color: 'var(--text-secondary)', maxWidth: 540, margin: 0, lineHeight: 1.7 }}>
-          Infrastructure inspection tickets auto-generated from GHI + risk classification.
-          Analysts update findings. Human review required before any field action.
+    <div className="page">
+      <div className="page-header fade-in">
+        <div className="page-eyebrow">Inspection Workflow</div>
+        <h1 className="page-title">Field Inspections</h1>
+        <p className="page-desc">
+          Tickets auto-created when physics analysis flags significant residual loss or GHI drops below threshold.
+          Update status after field investigation.
         </p>
       </div>
 
-      {/* Stats row */}
-      {stats && (
-        <div className="afu afu-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
-          <StatCard label="Total Tickets" value={stats.total.toString()} />
-          <StatCard label="Open" value={(stats.by_status['OPEN'] ?? 0).toString()} color={stats.by_status['OPEN'] > 0 ? 'var(--warning)' : undefined} />
-          <StatCard label="Critical / High Open" value={stats.critical_open.toString()} color={stats.critical_open > 0 ? 'var(--danger)' : undefined} />
-          <StatCard label="Resolved" value={(stats.by_status['RESOLVED'] ?? 0).toString()} color="var(--teal)" />
+      {fetchError && (
+        <div className="alert alert-err fade-in" style={{ marginBottom: 20 }}>
+          {fetchError}
         </div>
       )}
 
-      {/* Filters + table */}
-      <div className="afu afu-3" style={{ display: 'grid', gridTemplateColumns: selected ? '1fr 420px' : '1fr', gap: 20, alignItems: 'start' }}>
-
-        <div>
-          {/* Filters */}
-          <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span className="mono-label" style={{ marginBottom: 0 }}>Filter:</span>
-            {['', 'OPEN', 'IN_PROGRESS', 'RESOLVED', 'DISMISSED'].map(s => (
-              <button key={s} onClick={() => setStatusFilter(s)}
-                className={statusFilter === s ? 'btn-primary' : 'btn-secondary'}
-                style={{ padding: '6px 12px', fontSize: 10, cursor: 'pointer' }}>
-                {s || 'All Status'}
-              </button>
-            ))}
-            <div style={{ width: 1, height: 20, background: 'var(--border-dim)' }} />
-            {['', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map(p => (
-              <button key={p} onClick={() => setPriorityFilter(p)}
-                className={priorityFilter === p ? 'btn-primary' : 'btn-secondary'}
-                style={{ padding: '6px 12px', fontSize: 10, cursor: 'pointer', color: p ? (PRIORITY_COLORS[p] ?? undefined) : undefined }}>
-                {p || 'All Priority'}
-              </button>
-            ))}
+      {/* Stats row */}
+      {stats && (
+        <div className="grid-4 fade-in stagger-1" style={{ marginBottom: 20 }}>
+          <div className="metric-card">
+            <div className="metric-label">Open</div>
+            <div className="metric-value" style={{ color: stats.open > 0 ? 'var(--amber)' : 'var(--green)' }}>{stats.open}</div>
           </div>
-
-          {/* Table */}
-          <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
-            {/* Header */}
-            <div style={{ display: 'grid', gridTemplateColumns: '120px 80px 100px 100px 1fr 100px', padding: '10px 16px', background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-subtle)' }}>
-              {['Substation', 'Priority', 'Category', 'Status', 'Description', 'Created'].map(h => (
-                <span key={h} className="mono-label" style={{ marginBottom: 0, fontSize: 9 }}>{h}</span>
-              ))}
-            </div>
-
-            {loading ? (
-              <div style={{ padding: 32, textAlign: 'center' }}>
-                <div style={{ width: 24, height: 24, border: '2px solid var(--border-dim)', borderTopColor: 'var(--teal)', borderRadius: '50%', animation: 'spin .8s linear infinite', margin: '0 auto' }} />
-                <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-              </div>
-            ) : items.length === 0 ? (
-              <div style={{ padding: 32, textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-dim)' }}>
-                {statusFilter || priorityFilter ? 'No inspections match filters.' : 'No inspection tickets yet. Run a physics analysis to generate the first one.'}
-              </div>
-            ) : (
-              items.map((insp, i) => (
-                <div key={insp.id}
-                  onClick={() => openInspection(insp)}
-                  style={{
-                    display: 'grid', gridTemplateColumns: '120px 80px 100px 100px 1fr 100px',
-                    padding: '10px 16px', borderBottom: '1px solid var(--border-subtle)',
-                    background: selected?.id === insp.id ? 'rgba(0,245,196,0.04)' : i % 2 ? 'var(--bg-base)' : 'transparent',
-                    cursor: 'pointer', alignItems: 'center',
-                    borderLeft: selected?.id === insp.id ? '2px solid var(--teal)' : '2px solid transparent',
-                    transition: 'background .15s',
-                  }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--teal)' }}>{insp.substation_id}</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, color: PRIORITY_COLORS[insp.priority] ?? 'var(--text-secondary)' }}>{insp.priority}</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-secondary)' }}>{insp.category ?? '—'}</span>
-                  <span className={`chip ${STATUS_CHIP[insp.status] ?? ''}`} style={{ display: 'inline-flex', width: 'fit-content', fontSize: 9 }}>{insp.status.replace('_', ' ')}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {insp.description ?? '—'}
-                  </span>
-                  <span className="timestamp">{insp.created_at ? new Date(insp.created_at).toLocaleDateString() : '—'}</span>
-                </div>
-              ))
-            )}
-
-            {total > items.length && (
-              <div style={{ padding: '10px 16px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)', textAlign: 'center', borderTop: '1px solid var(--border-subtle)' }}>
-                Showing {items.length} of {total} — adjust filters to narrow results
-              </div>
-            )}
+          <div className="metric-card">
+            <div className="metric-label">Critical / High</div>
+            <div className="metric-value" style={{ color: stats.critical_open > 0 ? 'var(--red)' : 'var(--cyan)' }}>{stats.critical_open}</div>
+          </div>
+          <div className="metric-card">
+            <div className="metric-label">In Progress</div>
+            <div className="metric-value">{stats.in_progress}</div>
+          </div>
+          <div className="metric-card">
+            <div className="metric-label">Resolved</div>
+            <div className="metric-value" style={{ color: 'var(--green)' }}>{stats.resolved}</div>
           </div>
         </div>
+      )}
 
-        {/* Detail panel */}
-        {selected && (
-          <div className="panel" style={{ position: 'sticky', top: 80, padding: '24px 20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--teal)', marginBottom: 4 }}>INSPECTION DETAIL</div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-primary)' }}>{selected.substation_id}</div>
-              </div>
-              <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', fontSize: 18 }}>✕</button>
-            </div>
-
-            {/* Current state */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
-              <MetaItem label="Priority" value={selected.priority} color={PRIORITY_COLORS[selected.priority]} />
-              <MetaItem label="Status" value={selected.status.replace('_', ' ')} />
-              <MetaItem label="Category" value={selected.category ?? '—'} />
-              <MetaItem label="Urgency" value={selected.urgency ?? '—'} />
-            </div>
-
-            {/* Description */}
-            {selected.description && (
-              <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--bg-base)', borderRadius: 'var(--r-sm)', border: '1px solid var(--border-subtle)' }}>
-                <div className="mono-label" style={{ marginBottom: 4, fontSize: 9 }}>Interpretation</div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.65 }}>{selected.description}</div>
-              </div>
-            )}
-
-            {/* Recommended actions */}
-            {selected.recommended_actions && selected.recommended_actions.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <div className="mono-label" style={{ marginBottom: 8, fontSize: 9 }}>Recommended Actions</div>
-                {selected.recommended_actions.map((a, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--teal)', flexShrink: 0 }}>{String(i + 1).padStart(2, '0')}</span>
-                    <span style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{a}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Update form */}
-            <div style={{ borderTop: '1px solid var(--border-dim)', paddingTop: 16, marginTop: 4 }}>
-              <div className="mono-label" style={{ marginBottom: 12, fontSize: 9 }}>Update Inspection</div>
-
-              <div style={{ marginBottom: 10 }}>
-                <label className="mono-label" style={{ fontSize: 9, display: 'block', marginBottom: 4 }}>New Status</label>
-                <select value={newStatus} onChange={e => setNewStatus(e.target.value)} style={selectStyle}>
-                  {['OPEN', 'IN_PROGRESS', 'RESOLVED', 'DISMISSED'].map(s => (
-                    <option key={s} value={s}>{s.replace('_', ' ')}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ marginBottom: 10 }}>
-                <label className="mono-label" style={{ fontSize: 9, display: 'block', marginBottom: 4 }}>Findings (optional)</label>
-                <textarea value={findings} onChange={e => setFindings(e.target.value)}
-                  placeholder="Describe what was found on inspection…"
-                  rows={3} style={{ ...inputStyle, resize: 'vertical', minHeight: 64 }} />
-              </div>
-
-              {(newStatus === 'RESOLVED' || newStatus === 'DISMISSED') && (
-                <div style={{ marginBottom: 10 }}>
-                  <label className="mono-label" style={{ fontSize: 9, display: 'block', marginBottom: 4 }}>Resolution</label>
-                  <select value={resolution} onChange={e => setResolution(e.target.value)} style={selectStyle}>
-                    <option value="">— Select —</option>
-                    {RESOLUTIONS.map(r => <option key={r} value={r}>{r.replace(/_/g, ' ')}</option>)}
-                  </select>
-                </div>
-              )}
-
-              {updateMsg && (
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: updateMsg.startsWith('✅') ? 'var(--teal)' : 'var(--danger)', marginBottom: 10 }}>
-                  {updateMsg}
-                </div>
-              )}
-
-              <button onClick={handleUpdate} disabled={saving} className="btn-primary"
-                style={{ width: '100%', justifyContent: 'center', cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.6 : 1 }}>
-                {saving ? 'Saving…' : 'Save Update'}
-              </button>
-
-              <p style={{ fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.6, marginTop: 12, marginBottom: 0 }}>
-                Human review is required before any field action. 
-                This system provides infrastructure-scoped guidance only.
-              </p>
-            </div>
-          </div>
-        )}
+      {/* Filters */}
+      <div className="fade-in stagger-2" style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        <select className="input" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ maxWidth: 160 }}>
+          <option value="">All Statuses</option>
+          <option value="OPEN">Open</option>
+          <option value="IN_PROGRESS">In Progress</option>
+          <option value="RESOLVED">Resolved</option>
+          <option value="DISMISSED">Dismissed</option>
+        </select>
+        <select className="input" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)} style={{ maxWidth: 160 }}>
+          <option value="">All Priorities</option>
+          <option value="CRITICAL">Critical</option>
+          <option value="HIGH">High</option>
+          <option value="MEDIUM">Medium</option>
+          <option value="LOW">Low</option>
+        </select>
+        <button onClick={fetchAll} className="btn btn-secondary btn-sm">↻ Refresh</button>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-dim)', alignSelf: 'center', marginLeft: 4 }}>
+          {total} ticket{total !== 1 ? 's' : ''}
+        </span>
       </div>
 
+      {/* Table / List */}
+      {items.length === 0 ? (
+        <div className="panel fade-in">
+          <div className="empty-state">
+            <div className="empty-icon">🔍</div>
+            <div className="empty-title">No inspections found</div>
+            <div className="empty-desc">
+              Tickets are auto-created when an analysis exceeds the risk threshold. Run a physics analysis to generate your first ticket.
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Mobile: card list */}
+          <div className="hide-tablet fade-in stagger-3" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {items.map(item => (
+              <div
+                key={item.id}
+                className="panel panel-sm"
+                onClick={() => openDetail(item)}
+                style={{ cursor: 'pointer', borderLeft: `3px solid ${PRIORITY_COLORS[item.priority] || 'var(--border-dim)'}` }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--cyan)' }}>{item.substation_id}</div>
+                  <span className={`chip ${STATUS_CHIP[item.status] || 'chip-neutral'}`}>{item.status}</span>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6, lineHeight: 1.5 }}>{item.description?.slice(0, 100)}{item.description?.length > 100 ? '…' : ''}</div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: PRIORITY_COLORS[item.priority], textTransform: 'uppercase', letterSpacing: '0.06em' }}>{item.priority}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-dim)' }}>{item.created_at?.slice(0, 10)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop: table */}
+          <div className="panel panel-flush fade-in stagger-3 hide-mobile" style={{ overflowX: 'auto' }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Substation</th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                  <th>Urgency</th>
+                  <th>Description</th>
+                  <th>Created</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map(item => (
+                  <tr key={item.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(item)}>
+                    <td style={{ color: 'var(--cyan)' }}>{item.substation_id}</td>
+                    <td>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: PRIORITY_COLORS[item.priority], textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                        {item.priority}
+                      </span>
+                    </td>
+                    <td><span className={`chip ${STATUS_CHIP[item.status] || 'chip-neutral'}`}>{item.status}</span></td>
+                    <td style={{ color: 'var(--text-tertiary)' }}>{item.urgency || '—'}</td>
+                    <td style={{ color: 'var(--text-secondary)', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {item.description?.slice(0, 80)}{item.description?.length > 80 ? '…' : ''}
+                    </td>
+                    <td style={{ color: 'var(--text-dim)' }}>{item.created_at?.slice(0, 10)}</td>
+                    <td>
+                      <button className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); openDetail(item) }}>
+                        Update
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {/* Detail modal */}
+      {selected && (
+        <div
+          onClick={() => setSelected(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="panel panel-elevated fade-in"
+            style={{ width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto' }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+              <div>
+                <div className="page-eyebrow" style={{ marginBottom: 4 }}>Inspection Detail</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--text-primary)' }}>{selected.substation_id}</div>
+              </div>
+              <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>✕</button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+              <span className={`chip ${STATUS_CHIP[selected.status] || 'chip-neutral'}`}>{selected.status}</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: PRIORITY_COLORS[selected.priority], textTransform: 'uppercase', letterSpacing: '0.06em' }}>{selected.priority}</span>
+              {selected.urgency && <span className="chip chip-neutral">{selected.urgency}</span>}
+            </div>
+
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65, marginBottom: 20 }}>{selected.description}</p>
+
+            {selected.ai_recommendation && (
+              <div className="alert alert-info" style={{ marginBottom: 16 }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4, opacity: 0.7 }}>AI Recommendation</div>
+                {selected.ai_recommendation}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-tertiary)', display: 'block', marginBottom: 6 }}>
+                  Update Status
+                </label>
+                <select className="input" value={newStatus} onChange={e => setNewStatus(e.target.value)}>
+                  <option value="OPEN">Open</option>
+                  <option value="IN_PROGRESS">In Progress</option>
+                  <option value="RESOLVED">Resolved</option>
+                  <option value="DISMISSED">Dismissed</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-tertiary)', display: 'block', marginBottom: 6 }}>
+                  Resolution Code
+                </label>
+                <select className="input" value={resolution} onChange={e => setResolution(e.target.value)}>
+                  <option value="">— Select —</option>
+                  {RESOLUTIONS.map(r => <option key={r} value={r}>{r.replace(/_/g, ' ')}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-tertiary)', display: 'block', marginBottom: 6 }}>
+                  Field Findings
+                </label>
+                <textarea
+                  className="input"
+                  value={findings}
+                  onChange={e => setFindings(e.target.value)}
+                  rows={4}
+                  placeholder="Describe what was found during inspection…"
+                  style={{ resize: 'vertical' }}
+                />
+              </div>
+            </div>
+
+            {updateMsg && (
+              <div className={`alert ${updateMsg.startsWith('✓') ? 'alert-ok' : 'alert-err'}`} style={{ marginTop: 12 }}>
+                {updateMsg}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+              <button onClick={handleUpdate} disabled={saving} className="btn btn-primary" style={{ flex: 1 }}>
+                {saving ? 'Saving…' : 'Save Update'}
+              </button>
+              <button onClick={() => setSelected(null)} className="btn btn-secondary">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
-}
-
-function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
-  return (
-    <div className="panel metric-secondary">
-      <div className="metric-lbl">{label}</div>
-      <div className="metric-val" style={{ marginTop: 8, color: color || 'var(--teal)' }}>{value}</div>
-      {sub && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-dim)', marginTop: 5 }}>{sub}</div>}
-    </div>
-  )
-}
-
-function MetaItem({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div>
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '.10em', textTransform: 'uppercase', color: 'var(--text-dim)', marginBottom: 2 }}>{label}</div>
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: color ?? 'var(--text-secondary)' }}>{value}</div>
-    </div>
-  )
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '8px 12px',
-  background: 'var(--bg-void)',
-  border: '1px solid var(--border-dim)',
-  borderRadius: 'var(--r-sm)',
-  color: 'var(--text-primary)',
-  fontFamily: 'var(--font-mono)',
-  fontSize: 12,
-  outline: 'none',
-  boxSizing: 'border-box',
-}
-
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  cursor: 'pointer',
 }
