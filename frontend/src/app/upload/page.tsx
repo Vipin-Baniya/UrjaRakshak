@@ -17,20 +17,16 @@ export default function UploadPage() {
   const [dragging, setDragging] = useState(false)
   const [authError, setAuthError] = useState('')
   const [isAuthed, setIsAuthed] = useState(false)
-  const [authedEmail, setAuthedEmail] = useState<string | null>(null)
+  const [authLoading, setAuthLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Check for existing valid token on mount
   useEffect(() => {
     const token = localStorage.getItem('urjarakshak_token')
     if (token) {
       setIsAuthed(true)
-      // Verify token is still valid with a lightweight call
       api.getStatsSummary().catch(() => {
-        // Token expired — clear it
         localStorage.removeItem('urjarakshak_token')
         localStorage.removeItem('urjarakshak_role')
-        localStorage.removeItem('urjarakshak_user_id')
         setIsAuthed(false)
       })
     }
@@ -43,45 +39,44 @@ export default function UploadPage() {
     if (f) setFile(f)
   }, [])
 
-  const onDragOver = (e: React.DragEvent) => { e.preventDefault(); setDragging(true) }
-  const onDragLeave = () => setDragging(false)
-
-  // ── Auth ─────────────────────────────────────────────────────────────
   const handleLogin = async () => {
     setAuthError('')
+    setAuthLoading(true)
     try {
       const res = await api.login(email, password)
       localStorage.setItem('urjarakshak_token', res.access_token)
       localStorage.setItem('urjarakshak_role', res.role || 'viewer')
-      localStorage.setItem('urjarakshak_user_id', res.user_id || '')
       setIsAuthed(true)
       setStage('idle')
     } catch (e: any) {
       setAuthError(e.message || 'Login failed')
+    } finally {
+      setAuthLoading(false)
     }
   }
 
   const handleRegister = async () => {
     setAuthError('')
+    setAuthLoading(true)
     try {
       await api.register(email, password, 'analyst')
-      await handleLogin()
+      const res = await api.login(email, password)
+      localStorage.setItem('urjarakshak_token', res.access_token)
+      localStorage.setItem('urjarakshak_role', res.role || 'analyst')
+      setIsAuthed(true)
+      setStage('idle')
     } catch (e: any) {
       setAuthError(e.message || 'Registration failed')
+    } finally {
+      setAuthLoading(false)
     }
   }
 
-  // ── Upload ────────────────────────────────────────────────────────────
   const handleUpload = async () => {
     if (!file) return
     if (!substationId.trim()) { setErrorMsg('Substation ID is required'); return }
-
-    // Require auth
     const token = localStorage.getItem('urjarakshak_token')
-    if (!token && !isAuthed) {
-      setStage('auth')
-      return
-    }
+    if (!token) { setStage('auth'); return }
 
     setStage('uploading')
     setErrorMsg('')
@@ -91,11 +86,11 @@ export default function UploadPage() {
       setStage('done')
     } catch (e: any) {
       const msg: string = e.message || 'Upload failed'
-      // Token expired mid-session — go back to auth
-      if (msg.includes('Authentication') || msg.includes('401') || msg.includes('expired')) {
+      if (msg.includes('401') || msg.includes('expired') || msg.includes('Authentication')) {
+        localStorage.removeItem('urjarakshak_token')
         setIsAuthed(false)
         setStage('auth')
-        setAuthError('Your session expired. Please log in again.')
+        setAuthError('Session expired — please log in again.')
       } else {
         setErrorMsg(msg)
         setStage('error')
@@ -108,110 +103,118 @@ export default function UploadPage() {
     setFile(null)
     setResult(null)
     setErrorMsg('')
-    setSubstationId('')
   }
 
   const formatSize = (bytes: number) =>
-    bytes > 1024 * 1024
-      ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
-      : `${(bytes / 1024).toFixed(0)} KB`
+    bytes > 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${(bytes / 1024).toFixed(0)} KB`
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: '48px 40px' }}>
+    <div className="page" style={{ maxWidth: 900 }}>
 
       {/* Header */}
-      <div className="afu afu-1" style={{ marginBottom: 40 }}>
-        <div className="mono-label" style={{ color: 'var(--teal)', marginBottom: 6 }}>Data Ingestion</div>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 34, fontWeight: 400, letterSpacing: '-0.02em', margin: '0 0 12px' }}>
-          Meter Data Upload
-        </h1>
-        <p style={{ fontSize: 14, color: 'var(--text-secondary)', maxWidth: 560, margin: 0, lineHeight: 1.7 }}>
-          Upload CSV or Excel meter readings. The system will run per-meter Z-score anomaly detection
-          and store results in the database. Dashboard metrics update automatically.
+      <div className="page-header fade-in">
+        <div className="page-eyebrow">Data Ingestion</div>
+        <h1 className="page-title">Meter Data Upload</h1>
+        <p className="page-desc">
+          Upload CSV or Excel meter readings. Per-meter Z-score anomaly detection runs automatically.
+          Results appear in your dashboard immediately.
         </p>
       </div>
 
       {/* Format spec */}
-      <div className="afu afu-2" style={{ marginBottom: 32 }}>
-        <div className="section-label">Expected File Format</div>
-        <div className="panel panel-elevated" style={{ padding: '16px 20px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-            <div>
-              <div className="mono-label" style={{ color: 'var(--teal)', marginBottom: 8 }}>Required Columns</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {[
-                  ['timestamp', 'YYYY-MM-DD HH:MM:SS'],
-                  ['meter_id', 'Unique meter identifier'],
-                  ['energy_kwh', 'Numeric, positive'],
-                ].map(([col, desc]) => (
-                  <div key={col} style={{ display: 'flex', gap: 12 }}>
-                    <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--teal)', minWidth: 100 }}>{col}</code>
-                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{desc}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="mono-label" style={{ color: 'var(--teal)', marginBottom: 8 }}>Example</div>
-              <div className="code-block" style={{ fontSize: 11 }}>
-                <div><span className="code-teal">timestamp</span>,<span className="code-teal">meter_id</span>,<span className="code-teal">energy_kwh</span></div>
-                <div>2026-01-01 00:00:00,MTR001,12.5</div>
-                <div>2026-01-01 01:00:00,MTR001,13.1</div>
-                <div>2026-01-01 00:00:00,MTR002,8.2</div>
-              </div>
+      <div className="panel fade-in stagger-1" style={{ marginBottom: 24 }}>
+        <div className="sec-label">Expected File Format</div>
+        <div className="grid-2">
+          <div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--cyan)', marginBottom: 10 }}>Required Columns</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                ['timestamp', 'YYYY-MM-DD HH:MM:SS'],
+                ['meter_id', 'Unique meter identifier'],
+                ['energy_kwh', 'Numeric, positive'],
+              ].map(([col, desc]) => (
+                <div key={col} style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
+                  <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--cyan)', minWidth: 110, flexShrink: 0 }}>{col}</code>
+                  <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{desc}</span>
+                </div>
+              ))}
             </div>
           </div>
-          <div style={{ marginTop: 14, display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
-            <span>Accepted: .csv, .xlsx, .xls</span>
-            <span>Max: 50,000 rows · 10 MB</span>
+          <div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--cyan)', marginBottom: 10 }}>Example</div>
+            <div className="code-block" style={{ fontSize: 11 }}>
+              <div><span className="code-cyan">timestamp</span>,<span className="code-cyan">meter_id</span>,<span className="code-cyan">energy_kwh</span></div>
+              <div>2026-01-01 00:00:00,MTR001,12.5</div>
+              <div>2026-01-01 01:00:00,MTR001,13.1</div>
+              <div>2026-01-01 00:00:00,MTR002,8.2</div>
+            </div>
+            <div style={{ marginTop: 8, fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-dim)' }}>
+              .csv · .xlsx · .xls — max 50,000 rows / 10 MB
+            </div>
           </div>
         </div>
       </div>
 
       {/* Auth Gate */}
       {stage === 'auth' && (
-        <div className="afu afu-3" style={{ marginBottom: 32 }}>
-          <div className="section-label">Authentication Required</div>
-          <div className="panel" style={{ maxWidth: 420 }}>
-            <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20 }}>
-              Upload requires an analyst or admin account. Register to create a free account.
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
-              <input
-                type="email" placeholder="Email" value={email}
-                onChange={e => setEmail(e.target.value)}
-                style={inputStyle}
-              />
-              <input
-                type="password" placeholder="Password (min 8 chars)" value={password}
-                onChange={e => setPassword(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                style={inputStyle}
-              />
-            </div>
-            {authError && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--danger)', marginBottom: 12 }}>{authError}</div>}
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={handleLogin} className="btn-primary" style={{ flex: 1, justifyContent: 'center' }}>Login</button>
-              <button onClick={handleRegister} className="btn-secondary" style={{ flex: 1, justifyContent: 'center', cursor: 'pointer' }}>Register</button>
-            </div>
+        <div className="panel fade-in" style={{ marginBottom: 24, maxWidth: 440 }}>
+          <div className="sec-label accent">Authentication Required</div>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.6 }}>
+            Upload requires an analyst account. Register instantly for free.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+            <input
+              className="input"
+              type="email"
+              placeholder="Email address"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              autoComplete="email"
+              inputMode="email"
+            />
+            <input
+              className="input"
+              type="password"
+              placeholder="Password (min 8 chars)"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+              autoComplete="current-password"
+            />
+          </div>
+          {authError && <div className="alert alert-err" style={{ marginBottom: 14 }}>{authError}</div>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={handleLogin}
+              disabled={authLoading || !email || !password}
+              className="btn btn-primary"
+              style={{ flex: 1 }}
+            >
+              {authLoading ? 'Logging in…' : 'Login'}
+            </button>
+            <button
+              onClick={handleRegister}
+              disabled={authLoading || !email || !password}
+              className="btn btn-secondary"
+              style={{ flex: 1 }}
+            >
+              Register
+            </button>
           </div>
         </div>
       )}
 
-      {/* Logged-in status bar */}
+      {/* Logged-in status */}
       {isAuthed && stage !== 'auth' && (
-        <div style={{ marginBottom: 20, padding: '10px 16px', background: 'rgba(0,245,196,0.06)', border: '1px solid rgba(0,245,196,0.2)', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--teal)' }}>
-            ✓ Authenticated — ready to upload
-          </span>
+        <div className="alert alert-ok fade-in" style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>✓ Authenticated — ready to upload</span>
           <button
             onClick={() => {
               localStorage.removeItem('urjarakshak_token')
               localStorage.removeItem('urjarakshak_role')
-              localStorage.removeItem('urjarakshak_user_id')
               setIsAuthed(false)
             }}
-            style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}
+            style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'currentColor', background: 'none', border: 'none', cursor: 'pointer', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.06em' }}
           >
             Log out
           </button>
@@ -220,18 +223,18 @@ export default function UploadPage() {
 
       {/* Upload form */}
       {(stage === 'idle' || stage === 'error') && (
-        <div className="afu afu-3">
-          <div className="section-label">Upload Configuration</div>
-
-          {/* Substation ID */}
+        <div className="fade-in stagger-2">
           <div style={{ marginBottom: 20 }}>
-            <label className="mono-label" style={{ display: 'block', marginBottom: 8 }}>Substation ID *</label>
+            <label style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-tertiary)', display: 'block', marginBottom: 8 }}>
+              Substation ID *
+            </label>
             <input
+              className="input"
               type="text"
               placeholder="e.g. SS001"
               value={substationId}
               onChange={e => setSubstationId(e.target.value)}
-              style={{ ...inputStyle, maxWidth: 300 }}
+              style={{ maxWidth: 300 }}
             />
           </div>
 
@@ -239,16 +242,16 @@ export default function UploadPage() {
           <div
             onClick={() => inputRef.current?.click()}
             onDrop={onDrop}
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
+            onDragOver={e => { e.preventDefault(); setDragging(true) }}
+            onDragLeave={() => setDragging(false)}
             style={{
-              border: `2px dashed ${dragging ? 'var(--teal)' : file ? 'rgba(0,245,196,0.3)' : 'var(--border-dim)'}`,
+              border: `2px dashed ${dragging ? 'var(--cyan)' : file ? 'rgba(0,212,255,0.3)' : 'var(--border-dim)'}`,
               borderRadius: 'var(--r-lg)',
-              padding: '40px 24px',
+              padding: 'clamp(24px, 5vw, 40px) 24px',
               textAlign: 'center',
               cursor: 'pointer',
-              background: dragging ? 'rgba(0,245,196,0.04)' : file ? 'rgba(0,245,196,0.02)' : 'var(--bg-panel)',
-              transition: 'all .2s',
+              background: dragging ? 'rgba(0,212,255,0.04)' : file ? 'rgba(0,212,255,0.02)' : 'var(--bg-panel)',
+              transition: 'all 0.2s',
               marginBottom: 20,
             }}
           >
@@ -261,39 +264,33 @@ export default function UploadPage() {
             />
             {file ? (
               <div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--teal)', marginBottom: 6 }}>{file.name}</div>
-                <div className="timestamp">{formatSize(file.size)}</div>
+                <div style={{ fontSize: 24, marginBottom: 8 }}>📄</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--cyan)', marginBottom: 4 }}>{file.name}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)' }}>{formatSize(file.size)}</div>
               </div>
             ) : (
               <div>
-                <div style={{ fontSize: 28, marginBottom: 12 }}>📁</div>
+                <div style={{ fontSize: 28, marginBottom: 12, opacity: 0.5 }}>📁</div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                  Drop CSV or Excel file here, or click to browse
+                  Drop CSV or Excel file here, or tap to browse
                 </div>
-                <div className="timestamp">.csv · .xlsx · .xls — max 10 MB</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-dim)' }}>.csv · .xlsx · .xls — max 10 MB</div>
               </div>
             )}
           </div>
 
-          {errorMsg && (
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--danger)', marginBottom: 16, padding: '10px 14px', background: 'rgba(255,77,79,0.08)', borderRadius: 'var(--r-sm)', border: '1px solid rgba(255,77,79,0.2)' }}>
-              {errorMsg}
-            </div>
-          )}
+          {errorMsg && <div className="alert alert-err" style={{ marginBottom: 16 }}>{errorMsg}</div>}
 
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button
               onClick={handleUpload}
-              disabled={!file}
-              className="btn-primary"
-              style={{ opacity: file ? 1 : 0.4, cursor: file ? 'pointer' : 'default' }}
+              disabled={!file || !substationId.trim()}
+              className="btn btn-primary btn-lg btn-block-mobile"
             >
-              {file ? 'Run Analysis →' : 'Select a file first'}
+              {file && substationId.trim() ? 'Run Analysis →' : 'Select file & substation first'}
             </button>
             {file && (
-              <button onClick={() => setFile(null)} className="btn-secondary" style={{ cursor: 'pointer' }}>
-                Clear
-              </button>
+              <button onClick={() => setFile(null)} className="btn btn-secondary">Clear</button>
             )}
           </div>
         </div>
@@ -301,100 +298,101 @@ export default function UploadPage() {
 
       {/* Processing */}
       {stage === 'uploading' && (
-        <div style={{ textAlign: 'center', padding: '60px 0' }}>
-          <div style={{ width: 40, height: 40, border: '2px solid var(--border-dim)', borderTopColor: 'var(--teal)', borderRadius: '50%', animation: 'spin .8s linear infinite', margin: '0 auto 20px' }} />
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-          <div className="mono-label" style={{ marginBottom: 8, color: 'var(--teal)' }}>Processing {file?.name}</div>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
-            Parsing, running Z-score anomaly detection, storing to database…
-          </p>
+        <div className="loading-state">
+          <div className="spinner spinner-lg" />
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--cyan)', marginBottom: 6 }}>Processing {file?.name}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Parsing → Z-score detection → Storing to database…</div>
+          </div>
         </div>
       )}
 
       {/* Results */}
       {stage === 'done' && result && (
-        <div className="afu afu-1">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-            <div className="section-label" style={{ marginBottom: 0 }}>Analysis Complete</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={reset} className="btn-secondary" style={{ cursor: 'pointer', padding: '7px 14px', fontSize: 10 }}>Upload Another</button>
-              <Link href="/dashboard" className="btn-primary" style={{ padding: '7px 14px', fontSize: 10 }}>View Dashboard →</Link>
+        <div className="fade-in">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+            <div className="sec-label accent" style={{ marginBottom: 0 }}>Analysis Complete</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={reset} className="btn btn-secondary btn-sm">Upload Another</button>
+              <Link href="/dashboard" className="btn btn-primary btn-sm">View Dashboard →</Link>
             </div>
           </div>
 
-          {/* Summary cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
-            <SummaryCard label="Rows Processed" value={result.rows_parsed.toLocaleString()} />
-            <SummaryCard label="Total Energy" value={`${result.summary.total_energy_kwh.toLocaleString()} kWh`} />
-            <SummaryCard label="Anomalies" value={result.summary.anomalies_detected.toString()} sub={`${result.summary.anomaly_rate_pct}% rate`} alert={result.summary.anomalies_detected > 0} />
-            <SummaryCard label="Confidence" value={`${(result.summary.confidence_score * 100).toFixed(1)}%`} />
+          <div className="grid-4" style={{ marginBottom: 20 }}>
+            <ResultCard label="Rows Processed" value={result.rows_parsed.toLocaleString()} />
+            <ResultCard label="Total Energy" value={`${result.summary.total_energy_kwh.toLocaleString()} kWh`} />
+            <ResultCard
+              label="Anomalies"
+              value={result.summary.anomalies_detected.toString()}
+              sub={`${result.summary.anomaly_rate_pct}% rate`}
+              alert={result.summary.anomalies_detected > 0}
+            />
+            <ResultCard
+              label="Confidence"
+              value={`${(result.summary.confidence_score * 100).toFixed(1)}%`}
+            />
           </div>
 
-          {/* Rows info */}
           {result.rows_skipped > 0 && (
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--warning)', padding: '8px 12px', background: 'rgba(245,166,35,0.06)', borderRadius: 'var(--r-sm)', border: '1px solid rgba(245,166,35,0.2)', marginBottom: 20 }}>
+            <div className="alert alert-warn" style={{ marginBottom: 16 }}>
               {result.rows_skipped} rows skipped (invalid timestamps, negative values, or missing meter_id)
             </div>
           )}
 
-          {/* Anomaly table */}
           {result.anomaly_sample.length > 0 && (
-            <div>
-              <div className="section-label">Top Anomalous Readings (by Z-score)</div>
-              <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr 1fr 1fr 1fr', gap: 0, borderBottom: '1px solid var(--border-subtle)', padding: '10px 16px', background: 'var(--bg-elevated)' }}>
-                  {['Meter ID', 'Timestamp', 'Actual kWh', 'Expected kWh', 'Z-Score', 'Anomaly Score'].map(h => (
-                    <span key={h} className="mono-label" style={{ marginBottom: 0, fontSize: 9 }}>{h}</span>
-                  ))}
-                </div>
-                {result.anomaly_sample.map((row, i) => (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr 1fr 1fr 1fr', padding: '10px 16px', borderBottom: '1px solid var(--border-subtle)', background: i % 2 ? 'var(--bg-base)' : 'transparent' }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--teal)' }}>{row.meter_id}</span>
-                    <span className="timestamp">{row.timestamp.replace('T', ' ').slice(0, 16)}</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{row.energy_kwh.toFixed(2)}</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>{row.expected_kwh?.toFixed(2) ?? '—'}</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: Math.abs(row.z_score) > 3 ? 'var(--danger)' : 'var(--warning)' }}>
-                      {row.z_score > 0 ? '+' : ''}{row.z_score?.toFixed(2)}σ
-                    </span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>
-                      {(row.anomaly_score * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                ))}
+            <div className="panel panel-flush" style={{ marginBottom: 20 }}>
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+                <div className="sec-label" style={{ marginBottom: 0 }}>Top Anomalous Readings (by Z-score)</div>
+              </div>
+              <div className="table-scroll">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Meter ID</th>
+                      <th>Timestamp</th>
+                      <th>Actual kWh</th>
+                      <th className="hide-mobile">Expected kWh</th>
+                      <th>Z-Score</th>
+                      <th className="hide-mobile">Score</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.anomaly_sample.map((row, i) => (
+                      <tr key={i}>
+                        <td style={{ color: 'var(--cyan)' }}>{row.meter_id}</td>
+                        <td>{row.timestamp.replace('T', ' ').slice(0, 16)}</td>
+                        <td>{row.energy_kwh.toFixed(2)}</td>
+                        <td className="hide-mobile">{row.expected_kwh?.toFixed(2) ?? '—'}</td>
+                        <td style={{ color: Math.abs(row.z_score) > 3 ? 'var(--red)' : 'var(--amber)' }}>
+                          {row.z_score > 0 ? '+' : ''}{row.z_score?.toFixed(2)}σ
+                        </td>
+                        <td className="hide-mobile" style={{ color: 'var(--text-tertiary)' }}>
+                          {(row.anomaly_score * 100).toFixed(0)}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
 
-          {/* Ethics note */}
-          <div style={{ marginTop: 20, padding: '12px 16px', borderRadius: 'var(--r-sm)', background: 'rgba(0,245,196,0.04)', border: '1px solid var(--border-subtle)' }}>
-            <div className="mono-label" style={{ color: 'var(--teal)', marginBottom: 4 }}>Ethics Guardrail</div>
-            <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.65 }}>{result.ethics_note}</p>
+          <div className="panel" style={{ background: 'rgba(0,212,255,0.03)' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--cyan)', marginBottom: 6 }}>Ethics Guardrail</div>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.7 }}>{result.ethics_note}</p>
           </div>
         </div>
       )}
-
     </div>
   )
 }
 
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '10px 14px',
-  background: 'var(--bg-panel)',
-  border: '1px solid var(--border-dim)',
-  borderRadius: 'var(--r-sm)',
-  color: 'var(--text-primary)',
-  fontFamily: 'var(--font-mono)',
-  fontSize: 13,
-  outline: 'none',
-}
-
-function SummaryCard({ label, value, sub, alert }: { label: string; value: string; sub?: string; alert?: boolean }) {
+function ResultCard({ label, value, sub, alert }: { label: string; value: string; sub?: string; alert?: boolean }) {
   return (
-    <div className="panel" style={{ textAlign: 'center', padding: '18px 16px' }}>
-      <div className="mono-label" style={{ marginBottom: 8 }}>{label}</div>
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 26, fontWeight: 300, color: alert ? 'var(--warning)' : 'var(--teal)', letterSpacing: '-0.02em' }}>{value}</div>
-      {sub && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-dim)', marginTop: 4 }}>{sub}</div>}
+    <div className="metric-card" style={{ textAlign: 'center' }}>
+      <div className="metric-label">{label}</div>
+      <div className="metric-value" style={{ fontSize: 'clamp(20px, 3vw, 28px)', color: alert ? 'var(--amber)' : 'var(--cyan)' }}>{value}</div>
+      {sub && <div className="metric-sub">{sub}</div>}
     </div>
   )
 }
