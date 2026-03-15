@@ -63,9 +63,12 @@ def create_database_engine() -> AsyncEngine:
     connect_args: dict = {}
 
     if _is_supabase:
-        # Supabase requires SSL; asyncpg uses ssl= not sslmode=
+        # Supabase uses PgBouncer in transaction mode, which does not support
+        # asyncpg prepared statements. Setting statement_cache_size=0 disables
+        # the prepared statement cache, resolving DuplicatePreparedStatementError.
         connect_args["ssl"] = "require"
-        logger.info("Supabase detected — SSL enabled")
+        connect_args["statement_cache_size"] = 0
+        logger.info("Supabase detected — SSL enabled, prepared statement cache disabled (pgbouncer compat)")
 
     if settings.is_development:
         engine = create_async_engine(
