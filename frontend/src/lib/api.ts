@@ -142,8 +142,8 @@ export interface DashboardData {
     input_energy_mwh: number
     output_energy_mwh: number
     technical_loss_pct: number
-    residual_pct: number
-    confidence_score: number
+    residual_pct: number          // backend sends residual_pct (not residual_percentage)
+    confidence_score: number      // backend sends 0–100 (already multiplied)
     balance_status: string
     requires_review: boolean
     created_at: string
