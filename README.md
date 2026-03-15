@@ -73,8 +73,8 @@ Open **http://localhost:3000**
 | `ENVIRONMENT` | | `development` | `development` / `staging` / `production` |
 | `ALLOWED_ORIGINS` | | `http://localhost:3000,3001` | Comma-separated CORS origins |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | | `60` | JWT expiry |
-| `ANTHROPIC_API_KEY` | optional | — | AI interpretation (Claude) |
-| `OPENAI_API_KEY` | optional | — | AI interpretation fallback |
+| `OPENAI_API_KEY`    | optional | — | AI interpretation via GPT-4o-mini (recommended) |
+| `ANTHROPIC_API_KEY` | optional | — | AI interpretation via Claude (alternative; takes priority if both set) |
 
 ### Frontend (`frontend/.env.local`)
 
