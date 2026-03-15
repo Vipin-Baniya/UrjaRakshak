@@ -10,7 +10,7 @@ services:
     region: oregon                # US Oregon region
     branch: main
 
-    buildCommand: "pip install -r requirements.txt"
+    buildCommand: "pip install -r requirements-render-free.txt"
     startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
 
     healthCheckPath: /health
@@ -25,8 +25,10 @@ services:
       - key: ENABLE_STRICT_ETHICS
         value: "true"
       - key: SECRET_KEY
-        generateValue: true       # Render auto-generates secure random secret
+        generateValue: true
       - key: DATABASE_URL
         sync: false               # Add your Supabase DATABASE_URL in Render dashboard
       - key: ALLOWED_ORIGINS
         sync: false               # Add your Vercel frontend URL after deploying frontend
+      - key: OPENAI_API_KEY
+        sync: false               # Optional: add your OpenAI key to enable AI interpretation
