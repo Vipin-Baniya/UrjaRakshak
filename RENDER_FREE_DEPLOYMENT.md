@@ -152,6 +152,42 @@ Go back to Render → your service → **Environment** tab:
 
 ---
 
+## Step 6 — Seed Demo Data (First Run)
+
+Without this step the dashboard opens empty. Run the seeder once after deployment:
+
+```bash
+# In your backend directory, with DATABASE_URL pointing to your Supabase DB:
+cd backend
+pip install -r requirements.txt
+DATABASE_URL="postgresql+asyncpg://postgres:[PASSWORD]@db.[REF].supabase.co:5432/postgres" \
+  python seed_demo_data.py
+
+# Creates: 5 substations, ~300 analyses, GHI snapshots, inspections, aging records
+# Login: admin@urjarakshak.dev / demo1234
+```
+
+Or on Render — go to your service → **Shell** tab (available on paid plans) and run `python seed_demo_data.py`.
+
+---
+
+## Step 7 — Enable AI Interpretation (Optional)
+
+With an OpenAI key, each physics analysis gets an AI-generated engineering narrative.
+
+In Render → your service → **Environment** tab, add:
+```
+OPENAI_API_KEY = sk-...
+```
+
+Save → Render redeploys. AI interpretation now runs automatically in the background
+after every analysis. Results appear on `GET /api/v1/analysis/{id}` under `ai_interpretation`.
+
+**Cost:** GPT-4o-mini at ~$0.00015/1K tokens. A typical analysis uses ~600 tokens = $0.0001.
+Running 100 analyses/day = ~$0.30/month.
+
+---
+
 ## Free Tier Limitations & Workarounds
 
 ### ⚠️ Cold Starts (Most Important)
