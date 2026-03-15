@@ -45,9 +45,9 @@ export default function StreamPage() {
   const loadRecent = useCallback(async (sub: string) => {
     try {
       const r = await streamApi.getRecent(sub, 30)
-      setEvents(r.events.slice().reverse())
+      setEvents(r.events?.slice().reverse() ?? [])
       setTotalCount(r.count)
-      setAnomalyCount(r.events.filter((e: LiveEvent) => e.is_anomaly).length)
+      setAnomalyCount(r.events?.filter((e: LiveEvent) => e.is_anomaly).length)
     } catch {}
   }, [])
 
@@ -172,8 +172,8 @@ export default function StreamPage() {
             </div>
             <div className="metric-card">
               <div className="metric-label">Avg Stability</div>
-              <div className="metric-value" style={{ color: stabilityColor(stability.avg_stability ?? null) }}>
-                {stability.avg_stability != null ? `${(stability.avg_stability * 100).toFixed(0)}%` : '—'}
+              <div className="metric-value" style={{ color: stabilityColor(stability.avg_stability_score ?? null) }}>
+                {stability.avg_stability_score != null ? `${(stability.avg_stability_score * 100).toFixed(0)}%` : '—'}
               </div>
               <div className="metric-sub">fleet avg</div>
             </div>
@@ -205,13 +205,13 @@ export default function StreamPage() {
                 <tr>
                   <th>Meter ID</th>
                   <th>Stability</th>
-                  <th className="hide-mobile">Readings</th>
+                  <th className="hide-mobile">Anomaly Rate</th>
                   <th className="hide-mobile">Last Reading</th>
                   <th className="hide-mobile">Trend</th>
                 </tr>
               </thead>
               <tbody>
-                {stability.meters.slice(0, 15).map((m: any) => (
+                {stability.meters?.slice(0, 15).map((m: any) => (
                   <tr key={m.meter_id}>
                     <td style={{ color: 'var(--cyan)' }}>{m.meter_id}</td>
                     <td>
@@ -224,10 +224,10 @@ export default function StreamPage() {
                         </span>
                       </div>
                     </td>
-                    <td className="hide-mobile">{m.reading_count ?? '—'}</td>
+                    <td className="hide-mobile">{m.anomaly_rate_30d != null ? `${(m.anomaly_rate_30d * 100).toFixed(1)}%` : '—'}</td>
                     <td className="hide-mobile">{m.last_reading_kwh != null ? `${m.last_reading_kwh.toFixed(2)} kWh` : '—'}</td>
-                    <td className="hide-mobile" style={{ color: m.trend === 'UP' ? 'var(--amber)' : m.trend === 'DOWN' ? 'var(--green)' : 'var(--text-dim)' }}>
-                      {m.trend === 'UP' ? '↑' : m.trend === 'DOWN' ? '↓' : '→'} {m.trend || '—'}
+                    <td className="hide-mobile" style={{ color: m.trend_direction === 'UP' ? 'var(--amber)' : m.trend_direction === 'DOWN' ? 'var(--green)' : 'var(--text-dim)' }}>
+                      {m.trend_direction === 'UP' ? '↑' : m.trend_direction === 'DOWN' ? '↓' : '→'} {m.trend_direction || '—'}
                     </td>
                   </tr>
                 ))}
