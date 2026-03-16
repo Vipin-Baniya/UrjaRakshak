@@ -64,6 +64,7 @@ def _inspection_to_dict(insp: Inspection) -> Dict[str, Any]:
         "urgency":              insp.urgency,
         "status":               insp.status,
         "description":          insp.description,
+        "ai_recommendation":    insp.ai_recommendation,
         "recommended_actions":  insp.recommended_actions,
         "findings":             insp.findings,
         "resolution_notes":     insp.resolution_notes,

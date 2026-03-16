@@ -415,6 +415,7 @@ class Inspection(Base):
 
     # Content
     description     = Column(Text, nullable=True)
+    ai_recommendation = Column(Text, nullable=True)
     recommended_actions = Column(JSON, nullable=True)
     findings        = Column(Text, nullable=True)
     resolution_notes = Column(Text, nullable=True)
