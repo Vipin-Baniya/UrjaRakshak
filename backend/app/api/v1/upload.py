@@ -27,6 +27,7 @@ from app.models.db_models import (
 )
 from app.auth import get_current_active_user, require_analyst
 from app.services.ghi_service import run_full_ghi_pipeline
+from app.core.meter_stability_engine import update_meter_stability
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -296,6 +297,7 @@ async def upload_meter_data(
 
     # ── Post-upload analytics: create Analysis + GHI snapshot ────────────
     # This populates the tables that Dashboard, GHI, and Inspections pages query.
+    analysis = None
     try:
         total_expected_kwh = sum(
             r.expected_kwh for r in readings if r.expected_kwh is not None
@@ -308,13 +310,13 @@ async def upload_meter_data(
         residual_pct = summary["residual_pct"]
 
         if residual_pct > 8.0:
-            balance_status = "severe_imbalance"
+            balance_status = "critical_imbalance"
         elif residual_pct > 5.0:
-            balance_status = "major_imbalance"
+            balance_status = "significant_imbalance"
         elif residual_pct > 3.0:
             balance_status = "minor_imbalance"
         elif residual_pct > 1.0:
-            balance_status = "near_balanced"
+            balance_status = "balanced"
         else:
             balance_status = "balanced"
 
@@ -351,6 +353,20 @@ async def upload_meter_data(
             db=db,
             created_by=current_user.id,
         )
+
+        # Populate per-meter stability scores so the Stream page can show data.
+        unique_meter_ids = {r.meter_id for r in readings}
+        for mid in unique_meter_ids:
+            try:
+                await update_meter_stability(
+                    meter_id=mid,
+                    substation_id=substation_id,
+                    db=db,
+                )
+            except Exception as stability_err:
+                logger.debug("Stability update skipped for meter %s: %s", mid, stability_err)
+        await db.commit()
+
     except Exception as exc:  # pragma: no cover
         logger.warning("Post-upload GHI pipeline failed (batch and analysis still saved): %s", exc)
         await db.rollback()
@@ -364,6 +380,7 @@ async def upload_meter_data(
 
     return {
         "batch_id": batch.id,
+        "analysis_id": analysis.id if analysis is not None else None,
         "status": "complete",
         "filename": filename,
         "substation_id": substation_id,

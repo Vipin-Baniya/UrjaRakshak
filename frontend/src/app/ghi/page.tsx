@@ -18,6 +18,7 @@ export default function GHIPage() {
   const [error, setError] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
+    setLoading(true)
     try {
       const d = await ghiApi.getDashboard()
       setData(d)

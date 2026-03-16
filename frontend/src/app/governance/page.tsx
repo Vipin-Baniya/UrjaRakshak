@@ -101,6 +101,9 @@ export default function GovernancePage() {
       {/* DRIFT TAB */}
       {tab === 'drift' && !loading && (
         <div className="fade-in">
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+            <button onClick={loadDrift} className="btn btn-secondary btn-sm">↻ Refresh</button>
+          </div>
           {drift ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div className="grid-3">
@@ -146,6 +149,9 @@ export default function GovernancePage() {
       {/* AGING TAB */}
       {tab === 'aging' && !loading && (
         <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button onClick={loadFleet} className="btn btn-secondary btn-sm">↻ Refresh</button>
+          </div>
           {/* Fleet aging summary */}
           {fleet && fleet.transformers?.length > 0 && (
             <div className="panel panel-flush">

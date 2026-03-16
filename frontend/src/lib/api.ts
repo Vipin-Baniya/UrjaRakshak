@@ -179,6 +179,7 @@ export interface DashboardData {
 
 export interface UploadResult {
   batch_id: string
+  analysis_id: string | null
   status: string
   filename: string
   substation_id: string

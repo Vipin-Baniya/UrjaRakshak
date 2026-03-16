@@ -144,6 +144,12 @@ export default function StreamPage() {
               ▶ Connect SSE
             </button>
           )}
+          <button
+            onClick={() => { loadStability(substation); loadRecent(substation) }}
+            className="btn btn-secondary btn-sm"
+          >
+            ↻ Refresh
+          </button>
           <div className={`live-pill ${connected ? 'online' : 'offline'}`}>
             <span className="live-dot" />
             {connected ? `${substation} live` : 'Disconnected'}

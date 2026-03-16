@@ -33,7 +33,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func
 
-from app.models.db_models import AnomalyResult, ModelDriftLog, ModelVersion
+from app.models.db_models import AnomalyResult, MeterReading, ModelDriftLog, ModelVersion
 
 logger = logging.getLogger(__name__)
 
@@ -234,13 +234,44 @@ async def run_drift_check(
     ref_scores  = [float(s) for s in ref_rows  if s is not None]
     eval_scores = [float(s) for s in eval_rows if s is not None]
 
-    # Reference anomaly rate
+    # Fall back to MeterReading.anomaly_score when AnomalyResult has insufficient samples.
+    # This ensures drift detection works immediately after a CSV upload, before any dedicated
+    # ML results have been recorded in AnomalyResult.
+    if len(ref_scores) < MIN_REFERENCE_SAMPLES:
+        mr_ref = (await db.execute(
+            select(MeterReading.anomaly_score)
+            .where(MeterReading.anomaly_score.isnot(None))
+            .where(MeterReading.timestamp >= ref_start)
+            .where(MeterReading.timestamp <  ref_end)
+            .limit(2000)
+        )).scalars().all()
+        if len(mr_ref) > len(ref_scores):
+            ref_scores = [float(s) for s in mr_ref if s is not None]
+
+    if len(eval_scores) < MIN_EVALUATION_SAMPLES:
+        mr_eval = (await db.execute(
+            select(MeterReading.anomaly_score)
+            .where(MeterReading.anomaly_score.isnot(None))
+            .where(MeterReading.timestamp >= eval_start)
+            .limit(500)
+        )).scalars().all()
+        if len(mr_eval) > len(eval_scores):
+            eval_scores = [float(s) for s in mr_eval if s is not None]
+
+    # Reference anomaly rate — prefer AnomalyResult, fall back to MeterReading
     ref_anomaly_count = (await db.execute(
         select(func.count(AnomalyResult.id))
         .where(AnomalyResult.is_anomaly == True)
         .where(AnomalyResult.created_at >= ref_start)
         .where(AnomalyResult.created_at <  ref_end)
     )).scalar() or 0
+    if ref_anomaly_count == 0:
+        ref_anomaly_count = (await db.execute(
+            select(func.count(MeterReading.id))
+            .where(MeterReading.is_anomaly == True)
+            .where(MeterReading.timestamp >= ref_start)
+            .where(MeterReading.timestamp <  ref_end)
+        )).scalar() or 0
     ref_total = len(ref_scores) or 1
     reference_anomaly_rate = ref_anomaly_count / ref_total
 
@@ -249,6 +280,12 @@ async def run_drift_check(
         .where(AnomalyResult.is_anomaly == True)
         .where(AnomalyResult.created_at >= eval_start)
     )).scalar() or 0
+    if eval_anomaly_count == 0:
+        eval_anomaly_count = (await db.execute(
+            select(func.count(MeterReading.id))
+            .where(MeterReading.is_anomaly == True)
+            .where(MeterReading.timestamp >= eval_start)
+        )).scalar() or 0
     eval_total = len(eval_scores) or 1
     current_anomaly_rate = eval_anomaly_count / eval_total
 
