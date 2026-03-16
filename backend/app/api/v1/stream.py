@@ -35,7 +35,7 @@ from sqlalchemy import select, desc
 
 from app.database import get_db
 from app.auth import get_current_active_user
-from app.models.db_models import LiveMeterEvent, MeterStabilityScore, User
+from app.models.db_models import LiveMeterEvent, MeterReading, MeterStabilityScore, User
 from app.core.meter_stability_engine import (
     MeterStabilityEngine, update_meter_stability
 )
@@ -285,7 +285,12 @@ async def get_recent_events(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Dict[str, Any]:
-    """Last N live meter events for a substation (REST fallback for SSE)."""
+    """Last N live meter events for a substation (REST fallback for SSE).
+
+    Falls back to batch-uploaded MeterReading rows when no LiveMeterEvent
+    records exist for the substation, so the Stream page shows data
+    immediately after a CSV upload.
+    """
     q = (
         select(LiveMeterEvent)
         .where(LiveMeterEvent.substation_id == substation_id)
@@ -298,6 +303,38 @@ async def get_recent_events(
         q = q.where(LiveMeterEvent.is_anomaly == True)
 
     rows = (await db.execute(q)).scalars().all()
+
+    # If no live events exist, fall back to batch-uploaded meter readings
+    if not rows:
+        fq = (
+            select(MeterReading)
+            .where(MeterReading.substation_id == substation_id)
+            .order_by(desc(MeterReading.timestamp))
+            .limit(limit)
+        )
+        if meter_id:
+            fq = fq.where(MeterReading.meter_id == meter_id)
+        if anomalies_only:
+            fq = fq.where(MeterReading.is_anomaly == True)
+        batch_rows = (await db.execute(fq)).scalars().all()
+        return {
+            "substation_id": substation_id,
+            "count": len(batch_rows),
+            "events": [
+                {
+                    "id":            r.id,
+                    "meter_id":      r.meter_id,
+                    "event_ts":      r.timestamp.isoformat() if r.timestamp else None,
+                    "energy_kwh":    r.energy_kwh,
+                    "z_score":       r.z_score,
+                    "is_anomaly":    r.is_anomaly,
+                    "anomaly_score": r.anomaly_score,
+                    "source":        "csv_upload",
+                }
+                for r in batch_rows
+            ],
+        }
+
     return {
         "substation_id": substation_id,
         "count": len(rows),
