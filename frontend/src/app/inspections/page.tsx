@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { inspectionApi, Inspection, InspectionStats } from '@/lib/api'
+import { api, inspectionApi, Inspection, InspectionStats } from '@/lib/api'
 
 const PRIORITY_COLORS: Record<string, string> = {
   CRITICAL: 'var(--red)',
@@ -32,6 +32,10 @@ export default function InspectionsPage() {
   const [newStatus, setNewStatus] = useState('')
   const [updateMsg, setUpdateMsg] = useState('')
   const [fetchError, setFetchError] = useState<string | null>(null)
+  const [authEmail, setAuthEmail] = useState('')
+  const [authPassword, setAuthPassword] = useState('')
+  const [authLoading, setAuthLoading] = useState(false)
+  const [authError, setAuthError] = useState('')
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
@@ -46,8 +50,10 @@ export default function InspectionsPage() {
       setStats(statsRes)
     } catch (e: any) {
       const msg = e.message || 'Failed to load inspections'
-      if (msg.includes('401') || msg.includes('Authentication')) {
-        setFetchError('Login required — authenticate via the Upload page first.')
+      if (msg.includes('401') || msg.includes('Authentication') || msg.includes('Not authenticated')) {
+        setFetchError('auth_required')
+      } else if (msg.includes('403') || msg.includes('forbidden') || msg.includes('Forbidden')) {
+        setFetchError('auth_required')
       } else {
         setFetchError(msg)
       }
@@ -82,6 +88,39 @@ export default function InspectionsPage() {
     }
   }
 
+  const handleLogin = async () => {
+    setAuthError('')
+    setAuthLoading(true)
+    try {
+      const res = await api.login(authEmail, authPassword)
+      localStorage.setItem('urjarakshak_token', res.access_token)
+      localStorage.setItem('urjarakshak_role', res.role || 'analyst')
+      setFetchError(null)
+      fetchAll()
+    } catch (e: any) {
+      setAuthError(e.message || 'Login failed')
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+  const handleRegister = async () => {
+    setAuthError('')
+    setAuthLoading(true)
+    try {
+      await api.register(authEmail, authPassword, 'analyst')
+      const res = await api.login(authEmail, authPassword)
+      localStorage.setItem('urjarakshak_token', res.access_token)
+      localStorage.setItem('urjarakshak_role', res.role || 'analyst')
+      setFetchError(null)
+      fetchAll()
+    } catch (e: any) {
+      setAuthError(e.message || 'Registration failed')
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
   if (loading) return (
     <div className="loading-state" style={{ minHeight: 'calc(100vh - 120px)' }}>
       <div className="spinner spinner-lg" />
@@ -100,14 +139,50 @@ export default function InspectionsPage() {
         </p>
       </div>
 
-      {fetchError && (
+      {fetchError && fetchError !== 'auth_required' && (
         <div className="alert alert-err fade-in" style={{ marginBottom: 20 }}>
           {fetchError}
         </div>
       )}
 
+      {fetchError === 'auth_required' && (
+        <div className="panel fade-in" style={{ marginBottom: 24, maxWidth: 440 }}>
+          <div className="sec-label accent">Authentication Required</div>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.6 }}>
+            Viewing inspections requires an analyst account.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+            <input
+              className="input"
+              type="email"
+              placeholder="Email address"
+              value={authEmail}
+              onChange={e => setAuthEmail(e.target.value)}
+              autoComplete="email"
+            />
+            <input
+              className="input"
+              type="password"
+              placeholder="Password"
+              value={authPassword}
+              onChange={e => setAuthPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+            />
+          </div>
+          {authError && <div className="alert alert-err" style={{ marginBottom: 14 }}>{authError}</div>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={handleLogin} disabled={authLoading || !authEmail || !authPassword} className="btn btn-primary" style={{ flex: 1 }}>
+              {authLoading ? 'Logging in…' : 'Login'}
+            </button>
+            <button onClick={handleRegister} disabled={authLoading || !authEmail || !authPassword} className="btn btn-secondary" style={{ flex: 1 }}>
+              Register
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Stats row */}
-      {stats && (
+      {stats && !fetchError && (
         <div className="grid-4 fade-in stagger-1" style={{ marginBottom: 20 }}>
           <div className="metric-card">
             <div className="metric-label">Open</div>
@@ -133,6 +208,7 @@ export default function InspectionsPage() {
       )}
 
       {/* Filters */}
+      {!fetchError && (
       <div className="fade-in stagger-2" style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <select className="input" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ maxWidth: 160 }}>
           <option value="">All Statuses</option>
@@ -153,9 +229,10 @@ export default function InspectionsPage() {
           {total} ticket{total !== 1 ? 's' : ''}
         </span>
       </div>
+      )}
 
       {/* Table / List */}
-      {items.length === 0 ? (
+      {!fetchError && (items.length === 0 ? (
         <div className="panel fade-in">
           <div className="empty-state">
             <div className="empty-icon">🔍</div>
@@ -229,7 +306,7 @@ export default function InspectionsPage() {
             </table>
           </div>
         </>
-      )}
+      ))}
 
       {/* Detail modal */}
       {selected && (

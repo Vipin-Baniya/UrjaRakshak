@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { api, UploadResult } from '@/lib/api'
+import { api, ghiApi, UploadResult } from '@/lib/api'
 
 type Stage = 'idle' | 'auth' | 'uploading' | 'done' | 'error'
 
@@ -18,6 +18,9 @@ export default function UploadPage() {
   const [authError, setAuthError] = useState('')
   const [isAuthed, setIsAuthed] = useState(false)
   const [authLoading, setAuthLoading] = useState(false)
+  const [aiResult, setAiResult] = useState<any>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -80,10 +83,25 @@ export default function UploadPage() {
 
     setStage('uploading')
     setErrorMsg('')
+    setAiResult(null)
+    setAiError(null)
     try {
       const res = await api.uploadMeterData(file, substationId.trim())
       setResult(res)
       setStage('done')
+      // Auto-fetch AI interpretation if analysis was created
+      if (res.analysis_id) {
+        setAiLoading(true)
+        try {
+          const ai = await ghiApi.interpret(res.analysis_id)
+          setAiResult(ai)
+        } catch (err: any) {
+          console.warn('AI interpretation unavailable:', err?.message)
+          setAiError('AI analysis unavailable — the backend may not have an AI provider configured.')
+        } finally {
+          setAiLoading(false)
+        }
+      }
     } catch (e: any) {
       const msg: string = e.message || 'Upload failed'
       if (msg.includes('401') || msg.includes('expired') || msg.includes('Authentication')) {
@@ -103,6 +121,8 @@ export default function UploadPage() {
     setFile(null)
     setResult(null)
     setErrorMsg('')
+    setAiResult(null)
+    setAiError(null)
   }
 
   const formatSize = (bytes: number) =>
@@ -374,6 +394,94 @@ export default function UploadPage() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+
+          {/* AI Analysis Results */}
+          {(aiLoading || aiResult || aiError) && (
+            <div className="panel fade-in" style={{ marginBottom: 20, borderLeft: '3px solid var(--cyan)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <div className="sec-label accent" style={{ marginBottom: 0 }}>AI Grid Analysis</div>
+                {aiLoading && <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><div className="spinner" style={{ width: 16, height: 16 }} /><span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-dim)' }}>Analyzing…</span></div>}
+                {aiResult && !aiLoading && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: aiResult.ai_configured === false ? 'var(--text-dim)' : 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{aiResult.ai_configured === false ? 'Offline Mode' : `Live · ${aiResult.ai_provider || 'AI'}`}</span>}
+              </div>
+
+              {aiError && <div className="alert alert-warn" style={{ marginBottom: 12 }}>{aiError}</div>}
+
+              {aiResult && (() => {
+                const ai = aiResult.ai_interpretation
+                const ghiSnap = aiResult.ghi_snapshot || aiResult.ghi
+                const ghiScore = ghiSnap?.ghi_score ?? ghiSnap?.ghi
+                const ghiClass = ghiSnap?.classification
+
+                const GHI_COLORS: Record<string, string> = { HEALTHY: 'var(--green)', STABLE: 'var(--cyan)', DEGRADED: 'var(--amber)', CRITICAL: '#FF6B35', SEVERE: 'var(--red)' }
+                const RISK_COLORS: Record<string, string> = { LOW: 'var(--green)', MEDIUM: 'var(--cyan)', HIGH: 'var(--amber)', CRITICAL: 'var(--red)', SEVERE: 'var(--red)' }
+
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {/* GHI + Risk row */}
+                    <div className="grid-3">
+                      {ghiScore != null && (
+                        <div className="metric-card">
+                          <div className="metric-label">GHI Score</div>
+                          <div className="metric-value" style={{ color: GHI_COLORS[ghiClass] || 'var(--cyan)' }}>{typeof ghiScore === 'number' ? ghiScore.toFixed(1) : ghiScore}</div>
+                          <div className="metric-sub">{ghiClass || '—'}</div>
+                        </div>
+                      )}
+                      {ai?.risk_level && (
+                        <div className="metric-card">
+                          <div className="metric-label">Risk Level</div>
+                          <div className="metric-value" style={{ fontSize: 20, color: RISK_COLORS[ai.risk_level] || 'var(--cyan)' }}>{ai.risk_level}</div>
+                          <div className="metric-sub">{ai.inspection_priority || '—'} priority</div>
+                        </div>
+                      )}
+                      {aiResult.inspection_auto_created && (
+                        <div className="metric-card">
+                          <div className="metric-label">Inspection</div>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--amber)', marginTop: 4 }}>Auto-Created</div>
+                          <div className="metric-sub"><Link href="/inspections" style={{ color: 'var(--cyan)' }}>View ticket →</Link></div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* AI hypothesis */}
+                    {ai?.primary_infrastructure_hypothesis && (
+                      <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--r-sm)', padding: '12px 16px', border: '1px solid var(--border-ghost)' }}>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--cyan)', marginBottom: 6 }}>Primary Hypothesis</div>
+                        <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.65 }}>{ai.primary_infrastructure_hypothesis}</p>
+                      </div>
+                    )}
+
+                    {/* Recommended actions */}
+                    {ai?.recommended_actions && ai.recommended_actions.length > 0 && (
+                      <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--r-sm)', padding: '12px 16px', border: '1px solid var(--border-ghost)' }}>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--amber)', marginBottom: 8 }}>Recommended Actions</div>
+                        <ul style={{ margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {ai.recommended_actions.map((action: string, i: number) => (
+                            <li key={i} style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{action}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Confidence commentary */}
+                    {ai?.confidence_commentary && (
+                      <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--r-sm)', padding: '12px 16px', border: '1px solid var(--border-ghost)' }}>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 6 }}>Confidence Assessment</div>
+                        <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.6 }}>{ai.confidence_commentary}</p>
+                      </div>
+                    )}
+
+                    {/* Trend assessment */}
+                    {ai?.trend_assessment && (
+                      <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--r-sm)', padding: '12px 16px', border: '1px solid var(--border-ghost)' }}>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 6 }}>Trend Assessment</div>
+                        <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.6 }}>{ai.trend_assessment}</p>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
           )}
 
