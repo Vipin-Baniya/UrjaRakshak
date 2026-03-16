@@ -19,7 +19,7 @@ from app.core.ai_interpretation_engine import (
 )
 from app.models.db_models import (
     Analysis, AnomalyResult, GridHealthSnapshot,
-    AIInterpretation, Inspection,
+    AIInterpretation, Inspection, MeterReading,
 )
 
 logger = logging.getLogger(__name__)
@@ -218,7 +218,24 @@ async def _load_anomaly_rate(substation_id: str, db: AsyncSession) -> Tuple[floa
         .where(AnomalyResult.substation_id == substation_id)
         .where(AnomalyResult.is_anomaly == True)
     )).scalar() or 0
-    return (flagged / total if total > 0 else 0.0), int(flagged)
+    if total > 0:
+        return (flagged / total), int(flagged)
+
+    # Fall back to MeterReading records (populated by CSV upload) when no
+    # dedicated AnomalyResult records exist yet.
+    total_mr = (await db.execute(
+        select(func.count(MeterReading.id))
+        .where(MeterReading.substation_id == substation_id)
+    )).scalar() or 0
+    if total_mr > 0:
+        flagged_mr = (await db.execute(
+            select(func.count(MeterReading.id))
+            .where(MeterReading.substation_id == substation_id)
+            .where(MeterReading.is_anomaly == True)
+        )).scalar() or 0
+        return (flagged_mr / total_mr, int(flagged_mr))
+
+    return 0.0, 0
 
 
 def _is_trend_increasing(history: List[float]) -> bool:

@@ -26,6 +26,7 @@ from app.models.db_models import (
     MeterUploadBatch, User,
 )
 from app.auth import get_current_active_user, require_analyst
+from app.services.ghi_service import run_full_ghi_pipeline
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -292,6 +293,67 @@ async def upload_meter_data(
 
     await db.commit()
     await db.refresh(batch)
+
+    # ── Post-upload analytics: create Analysis + GHI snapshot ────────────
+    # This populates the tables that Dashboard, GHI, and Inspections pages query.
+    try:
+        total_expected_kwh = sum(
+            r.expected_kwh for r in readings if r.expected_kwh is not None
+        )
+        total_energy_kwh_val = summary["total_energy_kwh"]
+        input_mwh = round(total_energy_kwh_val / 1000.0, 4)
+        # When expected == 0 (e.g. all readings had < 3 samples), treat as no-loss
+        output_mwh = round(total_expected_kwh / 1000.0, 4) if total_expected_kwh > 0 else input_mwh
+        actual_loss_mwh = round(abs(total_energy_kwh_val - total_expected_kwh) / 1000.0, 4)
+        residual_pct = summary["residual_pct"]
+
+        if residual_pct > 8.0:
+            balance_status = "severe_imbalance"
+        elif residual_pct > 5.0:
+            balance_status = "major_imbalance"
+        elif residual_pct > 3.0:
+            balance_status = "minor_imbalance"
+        elif residual_pct > 1.0:
+            balance_status = "near_balanced"
+        else:
+            balance_status = "balanced"
+
+        analysis = Analysis(
+            substation_id=substation_id,
+            input_energy_mwh=input_mwh,
+            output_energy_mwh=output_mwh,
+            time_window_hours=24.0,
+            expected_loss_mwh=0.0,
+            actual_loss_mwh=actual_loss_mwh,
+            residual_mwh=actual_loss_mwh,
+            residual_percentage=residual_pct,
+            balance_status=balance_status,
+            confidence_score=summary["confidence_score"],
+            measurement_quality="medium",
+            requires_review=residual_pct > 3.0,
+            created_by=current_user.id,
+        )
+        db.add(analysis)
+        await db.flush()
+        await db.commit()  # persist Analysis independently of GHI pipeline
+
+        await run_full_ghi_pipeline(
+            analysis_id=analysis.id,
+            substation_id=substation_id,
+            residual_pct=residual_pct,
+            confidence=summary["confidence_score"],
+            balance_status=balance_status,
+            measurement_quality="medium",
+            input_mwh=input_mwh,
+            output_mwh=output_mwh,
+            expected_loss_mwh=0.0,
+            actual_loss_mwh=actual_loss_mwh,
+            db=db,
+            created_by=current_user.id,
+        )
+    except Exception as exc:  # pragma: no cover
+        logger.warning("Post-upload GHI pipeline failed (batch and analysis still saved): %s", exc)
+        await db.rollback()
 
     # Build anomaly sample for response (top 10 by anomaly score)
     top_anomalies = sorted(
