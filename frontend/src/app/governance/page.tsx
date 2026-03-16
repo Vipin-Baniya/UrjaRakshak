@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { governanceApi, DriftResult, FleetAging, AuditEntry } from '@/lib/api'
+import { api, governanceApi, DriftResult, FleetAging, AuditEntry } from '@/lib/api'
 
 type Tab = 'drift' | 'aging' | 'audit'
 
@@ -19,6 +19,21 @@ export default function GovernancePage() {
   const [agingResult, setAgingResult] = useState<any>(null)
   const [agingLoading, setAgingLoading] = useState(false)
   const [tabError, setTabError] = useState<string | null>(null)
+  const [authEmail, setAuthEmail] = useState('')
+  const [authPassword, setAuthPassword] = useState('')
+  const [authLoading, setAuthLoading] = useState(false)
+  const [authError, setAuthError] = useState('')
+
+  const handleTabError = (e: any) => {
+    const msg: string = e?.message || 'Request failed'
+    if (msg.includes('401') || msg.includes('Authentication') || msg.includes('Not authenticated') ||
+        msg.includes('403') || msg.includes('Forbidden') || msg.includes('forbidden') ||
+        msg.includes('Only analysts') || msg.includes('analyst')) {
+      setTabError('auth_required')
+    } else {
+      setTabError(msg)
+    }
+  }
 
   const loadDrift = useCallback(async () => {
     setLoading(true); setTabError(null)
@@ -26,7 +41,7 @@ export default function GovernancePage() {
       const d = await governanceApi.checkDrift()
       setDrift(d)
     } catch (e: any) {
-      setTabError(e.message?.includes('401') ? 'Login required — authenticate via Upload page first.' : e.message)
+      handleTabError(e)
     } finally { setLoading(false) }
   }, [])
 
@@ -36,7 +51,7 @@ export default function GovernancePage() {
       const f = await governanceApi.getFleetAging()
       setFleet(f)
     } catch (e: any) {
-      setTabError(e.message?.includes('401') ? 'Login required.' : e.message)
+      handleTabError(e)
     } finally { setLoading(false) }
   }, [])
 
@@ -50,7 +65,7 @@ export default function GovernancePage() {
       setAuditLog(log.entries || [])
       setChainOk(valid?.verified ?? null)
     } catch (e: any) {
-      setTabError(e.message?.includes('401') ? 'Login required.' : e.message)
+      handleTabError(e)
     } finally { setLoading(false) }
   }, [])
 
@@ -71,6 +86,43 @@ export default function GovernancePage() {
     } finally { setAgingLoading(false) }
   }
 
+  const handleLogin = async () => {
+    setAuthError('')
+    setAuthLoading(true)
+    try {
+      const res = await api.login(authEmail, authPassword)
+      localStorage.setItem('urjarakshak_token', res.access_token)
+      localStorage.setItem('urjarakshak_role', res.role || 'analyst')
+      setTabError(null)
+      if (tab === 'drift') loadDrift()
+      else if (tab === 'aging') loadFleet()
+      else loadAudit()
+    } catch (e: any) {
+      setAuthError(e.message || 'Login failed')
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+  const handleRegister = async () => {
+    setAuthError('')
+    setAuthLoading(true)
+    try {
+      await api.register(authEmail, authPassword, 'analyst')
+      const res = await api.login(authEmail, authPassword)
+      localStorage.setItem('urjarakshak_token', res.access_token)
+      localStorage.setItem('urjarakshak_role', res.role || 'analyst')
+      setTabError(null)
+      if (tab === 'drift') loadDrift()
+      else if (tab === 'aging') loadFleet()
+      else loadAudit()
+    } catch (e: any) {
+      setAuthError(e.message || 'Registration failed')
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
   return (
     <div className="page">
       <div className="page-header fade-in">
@@ -89,7 +141,43 @@ export default function GovernancePage() {
         ))}
       </div>
 
-      {tabError && <div className="alert alert-err fade-in" style={{ marginBottom: 20 }}>{tabError}</div>}
+      {tabError && tabError !== 'auth_required' && <div className="alert alert-err fade-in" style={{ marginBottom: 20 }}>{tabError}</div>}
+
+      {tabError === 'auth_required' && (
+        <div className="panel fade-in" style={{ marginBottom: 24, maxWidth: 440 }}>
+          <div className="sec-label accent">Authentication Required</div>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.6 }}>
+            Governance features require an analyst account.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+            <input
+              className="input"
+              type="email"
+              placeholder="Email address"
+              value={authEmail}
+              onChange={e => setAuthEmail(e.target.value)}
+              autoComplete="email"
+            />
+            <input
+              className="input"
+              type="password"
+              placeholder="Password"
+              value={authPassword}
+              onChange={e => setAuthPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
+            />
+          </div>
+          {authError && <div className="alert alert-err" style={{ marginBottom: 14 }}>{authError}</div>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={handleLogin} disabled={authLoading || !authEmail || !authPassword} className="btn btn-primary" style={{ flex: 1 }}>
+              {authLoading ? 'Logging in…' : 'Login'}
+            </button>
+            <button onClick={handleRegister} disabled={authLoading || !authEmail || !authPassword} className="btn btn-secondary" style={{ flex: 1 }}>
+              Register
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading && (
         <div className="loading-state" style={{ padding: '48px 24px' }}>
@@ -99,7 +187,7 @@ export default function GovernancePage() {
       )}
 
       {/* DRIFT TAB */}
-      {tab === 'drift' && !loading && (
+      {tab === 'drift' && !loading && !tabError && (
         <div className="fade-in">
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
             <button onClick={loadDrift} className="btn btn-secondary btn-sm">↻ Refresh</button>
@@ -147,7 +235,7 @@ export default function GovernancePage() {
       )}
 
       {/* AGING TAB */}
-      {tab === 'aging' && !loading && (
+      {tab === 'aging' && !loading && !tabError && (
         <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <button onClick={loadFleet} className="btn btn-secondary btn-sm">↻ Refresh</button>
@@ -244,7 +332,7 @@ export default function GovernancePage() {
       )}
 
       {/* AUDIT TAB */}
-      {tab === 'audit' && !loading && (
+      {tab === 'audit' && !loading && !tabError && (
         <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             {chainOk !== null && (
