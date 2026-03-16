@@ -323,6 +323,7 @@ export interface Inspection {
   resolution: string | null
   assigned_to: string | null
   analysis_id: string | null
+  ai_recommendation: string | null
   created_at: string
   updated_at: string
   closed_at: string | null
@@ -431,6 +432,7 @@ export interface LiveEvent {
   is_anomaly: boolean
   anomaly_score: number | null
   source: string
+  type?: string
 }
 
 export interface MeterStability {

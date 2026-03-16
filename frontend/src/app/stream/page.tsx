@@ -278,7 +278,7 @@ export default function StreamPage() {
                       }
                     </td>
                     <td className="hide-mobile" style={{ color: 'var(--text-dim)' }}>
-                      {ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString() : '—'}
+                      {ev.event_ts ? new Date(ev.event_ts).toLocaleTimeString() : '—'}
                     </td>
                   </tr>
                 ))}
