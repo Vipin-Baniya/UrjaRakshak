@@ -242,14 +242,8 @@ export function AnimatedGridMap({ nodes, edges }: AnimatedGridMapProps) {
         .attr('x2', (d) => (d.target as D3Node).x!)
         .attr('y2', (d) => (d.target as D3Node).y!)
 
-      // Move particles along edges
+      // Move particles along edges (advance once per tick)
       particles.forEach((p) => {
-        p.t = (p.t + p.speed) % 1
-        const edge = simEdges[p.edgeIndex]
-        if (!edge) return
-        const s = edge.source as D3Node
-        const t = edge.target as D3Node
-        if (s.x === undefined || t.x === undefined) return
         p.t = (p.t + p.speed) % 1
       })
 
