@@ -29,6 +29,7 @@ export function CommandBar() {
     { href: '/',            label: 'Home' },
     { href: '/dashboard',   label: 'Dashboard' },
     { href: '/upload',      label: 'Upload' },
+    { href: '/analysis',    label: 'Analysis' },
     { href: '/ghi',         label: 'GHI' },
     { href: '/stream',      label: 'Live' },
     { href: '/inspections', label: 'Inspections' },

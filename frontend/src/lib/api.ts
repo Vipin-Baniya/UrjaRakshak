@@ -90,6 +90,9 @@ export const api = {
     return fetcher<any>(`/api/v1/analysis/${qs ? '?' + qs : ''}`, { headers: authHeaders() })
   },
 
+  getAnalysis: (id: string) =>
+    fetcher<any>(`/api/v1/analysis/${id}`, { headers: authHeaders() }),
+
   // ── Upload ───────────────────────────────────────────────────────────
   uploadMeterData: async (file: File, substationId: string): Promise<UploadResult> => {
     const form = new FormData()
