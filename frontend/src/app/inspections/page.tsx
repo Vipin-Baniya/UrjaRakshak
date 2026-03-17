@@ -16,7 +16,70 @@ const STATUS_CHIP: Record<string, string> = {
   RESOLVED:    'chip-ok',
   DISMISSED:   'chip-neutral',
 }
+const STATUS_COLORS: Record<string, string> = {
+  OPEN:        'var(--red)',
+  IN_PROGRESS: 'var(--amber)',
+  RESOLVED:    'var(--green)',
+  DISMISSED:   'var(--text-dim)',
+}
 const RESOLUTIONS = ['TECHNICAL_LOSS_NORMAL','EQUIPMENT_FAULT','METER_ISSUE','DATA_QUALITY','OTHER']
+
+/** Animated bar chart for inspection stats */
+function StatsBarChart({ data, colorMap, label }: {
+  data: Record<string, number>
+  colorMap: Record<string, string>
+  label: string
+}) {
+  const entries = Object.entries(data).filter(([, v]) => v > 0)
+  if (entries.length === 0) return null
+  const max = Math.max(...entries.map(([, v]) => v), 1)
+  return (
+    <div>
+      <div className="sec-label" style={{ marginBottom: 10 }}>{label}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+        {entries.map(([key, val]) => (
+          <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.07em', color: colorMap[key] || 'var(--text-dim)', minWidth: 90 }}>
+              {key.replace(/_/g, ' ')}
+            </span>
+            <div style={{ flex: 1, height: 8, background: 'var(--border-ghost)', borderRadius: 4, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%',
+                width: `${(val / max) * 100}%`,
+                background: colorMap[key] || 'var(--cyan)',
+                borderRadius: 4,
+                transition: 'width 0.7s ease',
+                animation: 'growRight 0.7s ease forwards',
+              }} />
+            </div>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', minWidth: 24, textAlign: 'right' }}>{val}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** Mini animated sparkline from an array of numbers */
+function Sparkline({ values, color = 'var(--cyan)' }: { values: number[]; color?: string }) {
+  if (values.length === 0) return null
+  const max = Math.max(...values, 1)
+  return (
+    <div className="sparkline" style={{ height: 28 }}>
+      {values.map((v, i) => (
+        <div
+          key={i}
+          className="sparkline-bar"
+          style={{
+            height: `${Math.max(4, (v / max) * 28)}px`,
+            background: color,
+            animationDelay: `${i * 0.03}s`,
+          }}
+        />
+      ))}
+    </div>
+  )
+}
 
 export default function InspectionsPage() {
   const [items, setItems] = useState<Inspection[]>([])
@@ -207,9 +270,21 @@ export default function InspectionsPage() {
         </div>
       )}
 
+      {/* Animated breakdown charts */}
+      {stats && !fetchError && stats.total > 0 && (
+        <div className="grid-2 fade-in stagger-2" style={{ marginBottom: 20 }}>
+          <div className="panel">
+            <StatsBarChart data={stats.by_status ?? {}} colorMap={STATUS_COLORS} label="By Status" />
+          </div>
+          <div className="panel">
+            <StatsBarChart data={stats.by_priority ?? {}} colorMap={PRIORITY_COLORS} label="By Priority" />
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       {!fetchError && (
-      <div className="fade-in stagger-2" style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div className="fade-in stagger-3" style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <select className="input" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ maxWidth: 160 }}>
           <option value="">All Statuses</option>
           <option value="OPEN">Open</option>
@@ -245,7 +320,7 @@ export default function InspectionsPage() {
       ) : (
         <>
           {/* Mobile: card list */}
-          <div className="hide-tablet fade-in stagger-3" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div className="hide-tablet fade-in stagger-4" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {items.map(item => (
               <div
                 key={item.id}
@@ -267,7 +342,7 @@ export default function InspectionsPage() {
           </div>
 
           {/* Desktop: table */}
-          <div className="panel panel-flush fade-in stagger-3 hide-mobile" style={{ overflowX: 'auto' }}>
+          <div className="panel panel-flush fade-in stagger-4 hide-mobile" style={{ overflowX: 'auto' }}>
             <table className="data-table">
               <thead>
                 <tr>

@@ -18,6 +18,105 @@ const stabilityColor = (score: number | null) => {
   return 'var(--red)'
 }
 
+/** Animated load-flow SVG diagram.
+ *  Nodes = substations / meters arranged in a ring.
+ *  Edges = animated dashed lines showing power flow direction.
+ */
+function LoadFlowDiagram({ meters, substation }: { meters: any[]; substation: string }) {
+  const W = 320, H = 240, CX = 160, CY = 120
+  const nodes = meters.length > 0 ? meters.slice(0, 8) : [
+    { meter_id: substation, stability_score: 0.9 },
+    { meter_id: 'M-A', stability_score: 0.75 },
+    { meter_id: 'M-B', stability_score: 0.55 },
+    { meter_id: 'M-C', stability_score: 0.85 },
+    { meter_id: 'M-D', stability_score: 0.3 },
+  ]
+  const n = nodes.length
+  const MAX_RADIUS = 80
+  const NODE_SPACING_FACTOR = 28
+  const R = Math.min(MAX_RADIUS, NODE_SPACING_FACTOR * n / 2)
+
+  const pos = nodes.map((_, i) => {
+    const angle = (2 * Math.PI * i) / n - Math.PI / 2
+    return {
+      x: CX + R * Math.cos(angle),
+      y: CY + R * Math.sin(angle),
+    }
+  })
+
+  // Build ring edges: each node connects to next
+  const edges = nodes.map((_, i) => ({
+    from: i,
+    to: (i + 1) % n,
+    reverse: nodes[i].stability_score < 0.5,
+  }))
+
+  return (
+    <div>
+      <div className="sec-label" style={{ marginBottom: 10 }}>Load Flow Diagram</div>
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <svg width={W} height={H} style={{ overflow: 'visible' }}>
+          {/* Flow edges */}
+          {edges.map((e, i) => {
+            const p1 = pos[e.from], p2 = pos[e.to]
+            return (
+              <line
+                key={i}
+                x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
+                stroke="var(--border-dim)"
+                strokeWidth={2}
+                strokeDasharray="8 4"
+                className={e.reverse ? 'flow-line-rev' : 'flow-line'}
+              />
+            )
+          })}
+          {/* Arrow heads in middle of each edge */}
+          {edges.map((e, i) => {
+            const p1 = pos[e.from], p2 = pos[e.to]
+            const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2
+            const dx = p2.x - p1.x, dy = p2.y - p1.y
+            const len = Math.sqrt(dx * dx + dy * dy)
+            const ux = dx / len, uy = dy / len
+            const side = e.reverse ? -1 : 1
+            return (
+              <polygon
+                key={`a${i}`}
+                points={`0,-4 6,0 0,4`}
+                fill="var(--cyan)"
+                opacity={0.6}
+                transform={`translate(${mx},${my}) rotate(${Math.atan2(side * uy, side * ux) * 180 / Math.PI})`}
+              />
+            )
+          })}
+          {/* Nodes */}
+          {nodes.map((m, i) => {
+            const { x, y } = pos[i]
+            const color = stabilityColor(m.stability_score ?? null)
+            const isHub = i === 0
+            return (
+              <g key={i}>
+                <circle cx={x} cy={y} r={isHub ? 14 : 10} fill="var(--bg-elevated)" stroke={color} strokeWidth={isHub ? 2.5 : 1.5} />
+                {isHub && <circle cx={x} cy={y} r={18} fill="none" stroke={color} strokeWidth={1} opacity={0.3} />}
+                <text x={x} y={y + 3} textAnchor="middle" fill={color} fontSize={isHub ? 7 : 6} fontFamily="monospace">
+                  {String(m.meter_id).slice(-4)}
+                </text>
+              </g>
+            )
+          })}
+        </svg>
+      </div>
+      <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+        {[['≥80%', 'var(--green)', 'Stable'], ['60–79%', 'var(--cyan)', 'Good'], ['40–59%', 'var(--amber)', 'Watch'], ['<40%', 'var(--red)', 'Alert']].map(([rng, c, lbl]) => (
+          <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: c, display: 'inline-block', flexShrink: 0 }} />
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-dim)', textTransform: 'uppercase' }}>{lbl} {rng}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function StreamPage() {
   const [substation, setSubstation] = useState('SS001')
   const [inputVal, setInputVal] = useState('SS001')
@@ -243,8 +342,13 @@ export default function StreamPage() {
         </div>
       )}
 
+      {/* Load flow diagram */}
+      <div className="panel fade-in stagger-4" style={{ marginBottom: 16 }}>
+        <LoadFlowDiagram meters={stability?.meters ?? []} substation={substation} />
+      </div>
+
       {/* Event log */}
-      <div className="panel panel-flush fade-in stagger-4">
+      <div className="panel panel-flush fade-in stagger-5">
         <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div className="sec-label" style={{ marginBottom: 0 }}>Event Log</div>
           <button onClick={() => { setEvents([]); setTotalCount(0); setAnomalyCount(0) }} className="btn btn-secondary btn-sm">Clear</button>
