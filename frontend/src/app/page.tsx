@@ -18,42 +18,102 @@ export default function Home() {
       .catch(() => {})
   }, [])
 
+  const principles = [
+    {
+      icon: '⚛',
+      color: 'cyan' as const,
+      title: 'Physics-first',
+      desc: 'Every result is grounded in First-Law thermodynamics. The engine refuses to output when confidence is insufficient.',
+    },
+    {
+      icon: '🔍',
+      color: 'blue' as const,
+      title: 'Explainable',
+      desc: 'Every formula is documented. Fourier decomposition shown. No black-box outputs. Engineers can verify every calculation.',
+    },
+    {
+      icon: '🛡',
+      color: 'green' as const,
+      title: 'Hard to game',
+      desc: '3-gate anomaly logic: physics gate + Z-score + Isolation Forest. All three must agree before flagging.',
+    },
+    {
+      icon: '⚖',
+      color: 'violet' as const,
+      title: 'Ethics-aware',
+      desc: 'No individual attribution. Infrastructure-scope only. SHA-256 audit chain on every action.',
+    },
+  ]
+
+  const stack = [
+    { icon: '⚡', color: 'cyan' as const,   label: 'Physics Truth Engine', sub: 'PTE v2.1',            desc: 'First-law thermodynamics. I²R losses per component. Temperature-corrected resistance. Uncertainty quantification.' },
+    { icon: '📊', color: 'green' as const,  label: 'Grid Health Index',    sub: 'GHI — 0 to 100',      desc: 'Composite score: PBS×35% + ASS×20% + CS×15% + TSS×15% + DIS×15%. Classifies HEALTHY → SEVERE.' },
+    { icon: '🔎', color: 'amber' as const,  label: 'Anomaly Detection',    sub: 'IF + Z-Score ensemble', desc: 'Isolation Forest trained on synthetic grid data. Statistical z-score gate. Per-meter rolling baselines.' },
+    { icon: '🌡', color: 'red' as const,    label: 'Transformer Aging',    sub: 'IEC 60076-7',          desc: 'Arrhenius thermal aging model. Hot-spot temperature, aging factor V, failure probability over 12 months.' },
+    { icon: '📉', color: 'blue' as const,   label: 'Drift Detection',      sub: 'PSI + K-S test',       desc: 'Population Stability Index and Kolmogorov-Smirnov test detect when the ML model has become stale.' },
+    { icon: '📡', color: 'violet' as const, label: 'Live Streaming',       sub: 'SSE — no Redis',       desc: 'Server-Sent Events with in-memory queues per substation. Per-meter stability scores updated on every event.' },
+  ]
+
+  const colorMap = {
+    cyan:   { text: 'var(--cyan)',   bg: 'var(--cyan-dim)',   border: 'rgba(10,240,255,0.2)'  },
+    green:  { text: 'var(--green)',  bg: 'var(--green-dim)',  border: 'rgba(5,232,154,0.2)'   },
+    amber:  { text: 'var(--amber)',  bg: 'var(--amber-dim)',  border: 'rgba(255,186,48,0.2)'  },
+    red:    { text: 'var(--red)',    bg: 'var(--red-dim)',    border: 'rgba(255,61,85,0.2)'   },
+    blue:   { text: 'var(--blue)',   bg: 'var(--blue-dim)',   border: 'rgba(77,148,255,0.2)'  },
+    violet: { text: 'var(--violet)', bg: 'var(--violet-dim)', border: 'rgba(155,114,255,0.2)' },
+  }
+
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto', padding: 'clamp(48px,6vw,80px) var(--page-pad-x) 0' }}>
+    <div style={{ maxWidth: 1240, margin: '0 auto', padding: 'clamp(52px,6.5vw,88px) var(--page-pad-x) 0' }}>
 
       {/* Hero */}
-      <section style={{ paddingBottom: 72 }}>
-        <div className="fade-in stagger-1" style={{ marginBottom: 18 }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--cyan)' }}>
-            v2.3 — Physics Truth Engine Active
+      <section style={{ paddingBottom: 80 }}>
+        <div className="fade-in stagger-1" style={{ marginBottom: 20 }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.14em',
+            textTransform: 'uppercase', color: 'var(--cyan)',
+          }}>
+            <span className="key key-cyan">v2.3</span>
+            Physics Truth Engine Active
           </span>
         </div>
 
         <h1 className="fade-in stagger-2" style={{
           fontFamily: 'var(--font-display)',
-          fontSize: 'clamp(32px, 5vw, 60px)',
-          fontWeight: 400,
-          letterSpacing: '-0.02em',
-          lineHeight: 1.08,
+          fontSize: 'clamp(34px, 5.5vw, 66px)',
+          fontWeight: 700,
+          letterSpacing: '-0.025em',
+          lineHeight: 1.06,
           color: 'var(--text-primary)',
-          maxWidth: 760,
-          marginBottom: 24,
+          maxWidth: 800,
+          marginBottom: 26,
         }}>
           Grid Intelligence<br />
-          Meets <em style={{ fontStyle: 'italic', color: 'var(--cyan)' }}>Thermodynamics</em>
+          Meets{' '}
+          <span style={{
+            background: 'linear-gradient(120deg, var(--cyan), var(--blue))',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+          }}>Thermodynamics</span>
         </h1>
 
         <p className="fade-in stagger-3" style={{
           fontSize: 17, color: 'var(--text-secondary)',
-          maxWidth: 540, marginBottom: 40, lineHeight: 1.7,
+          maxWidth: 560, marginBottom: 44, lineHeight: 1.75,
+          fontWeight: 400,
         }}>
           A physics-grounded system for energy integrity analysis.
           First Law of Thermodynamics as ground truth, not heuristics.
           Designed for transparency, explainability, and human oversight.
         </p>
 
-        <div className="fade-in stagger-4" style={{ display: 'flex', gap: 12, marginBottom: 64, flexWrap: 'wrap' }}>
-          <Link href="/dashboard" className="btn btn-primary btn-lg">Launch Dashboard →</Link>
+        <div className="fade-in stagger-4" style={{ display: 'flex', gap: 12, marginBottom: 68, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Link href="/dashboard" className="btn btn-primary btn-lg">
+            <span>Launch Dashboard</span>
+            <span>→</span>
+          </Link>
           <Link href="/upload" className="btn btn-secondary btn-lg">Upload Data</Link>
           <Link href="/docs" className="btn btn-secondary btn-lg">Documentation</Link>
         </div>
@@ -65,63 +125,92 @@ export default function Home() {
             Backend {backendOk === null ? 'connecting' : backendOk ? 'online' : 'offline'}
           </div>
           {ghiScore !== null && (
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>
-              Fleet GHI: <span style={{ color: ghiScore >= 70 ? 'var(--green)' : ghiScore >= 50 ? 'var(--amber)' : 'var(--red)', fontWeight: 500 }}>{ghiScore}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>
+              Fleet GHI:
+              <span className="key" style={{
+                color: ghiScore >= 70 ? 'var(--green)' : ghiScore >= 50 ? 'var(--amber)' : 'var(--red)',
+                background: ghiScore >= 70 ? 'var(--green-dim)' : ghiScore >= 50 ? 'var(--amber-dim)' : 'var(--red-dim)',
+                borderColor: ghiScore >= 70 ? 'rgba(5,232,154,0.3)' : ghiScore >= 50 ? 'rgba(255,186,48,0.3)' : 'rgba(255,61,85,0.3)',
+              }}>
+                {ghiScore}
+              </span>
             </div>
           )}
         </div>
       </section>
 
       {/* Principles */}
-      <section style={{ paddingBottom: 72, borderTop: '1px solid var(--border-subtle)', paddingTop: 48 }}>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 32 }}>
-          Design Principles
+      <section style={{ paddingBottom: 80, borderTop: '1px solid var(--border-subtle)', paddingTop: 56 }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, marginBottom: 36,
+        }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>
+            Design Principles
+          </div>
+          <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
         </div>
         <div className="grid-4">
-          {[
-            { icon: '⚛', title: 'Physics-first', desc: 'Every result is grounded in First-Law thermodynamics. The engine refuses to output when confidence is insufficient.' },
-            { icon: '🔍', title: 'Explainable', desc: 'Every formula is documented. Fourier decomposition shown. No black-box outputs. Engineers can verify every calculation.' },
-            { icon: '🛡', title: 'Hard to game', desc: '3-gate anomaly logic: physics gate + Z-score + Isolation Forest. All three must agree before flagging.' },
-            { icon: '⚖', title: 'Ethics-aware', desc: 'No individual attribution. Infrastructure-scope only. SHA-256 audit chain on every action.' },
-          ].map(p => (
-            <div key={p.title} className="panel" style={{ background: 'var(--bg-panel)' }}>
-              <div style={{ fontSize: 24, marginBottom: 12 }}>{p.icon}</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>{p.title}</div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65 }}>{p.desc}</div>
-            </div>
-          ))}
+          {principles.map(p => {
+            const c = colorMap[p.color]
+            return (
+              <div key={p.title} className="panel panel-glow" style={{ background: 'var(--bg-panel)' }}>
+                <div className="icon-circle icon-circle-md" style={{
+                  background: c.bg,
+                  border: `1px solid ${c.border}`,
+                  marginBottom: 16,
+                }}>
+                  {p.icon}
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, letterSpacing: '-0.01em' }}>{p.title}</div>
+                <div style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.68 }}>{p.desc}</div>
+              </div>
+            )
+          })}
         </div>
       </section>
 
       {/* Stack */}
-      <section style={{ paddingBottom: 72, borderTop: '1px solid var(--border-subtle)', paddingTop: 48 }}>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 32 }}>
-          What's inside
+      <section style={{ paddingBottom: 80, borderTop: '1px solid var(--border-subtle)', paddingTop: 56 }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, marginBottom: 36,
+        }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>
+            What&apos;s inside
+          </div>
+          <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
         </div>
         <div className="grid-3">
-          {[
-            { label: 'Physics Truth Engine', sub: 'PTE v2.1', desc: 'First-law thermodynamics. I²R losses per component. Temperature-corrected resistance. Uncertainty quantification.' },
-            { label: 'Grid Health Index', sub: 'GHI — 0 to 100', desc: 'Composite score: PBS×35% + ASS×20% + CS×15% + TSS×15% + DIS×15%. Classifies HEALTHY → SEVERE.' },
-            { label: 'Anomaly Detection', sub: 'IF + Z-Score ensemble', desc: 'Isolation Forest trained on synthetic grid data. Statistical z-score gate. Per-meter rolling baselines.' },
-            { label: 'Transformer Aging', sub: 'IEC 60076-7', desc: 'Arrhenius thermal aging model. Hot-spot temperature, aging factor V, failure probability over 12 months.' },
-            { label: 'Drift Detection', sub: 'PSI + K-S test', desc: 'Population Stability Index and Kolmogorov-Smirnov test detect when the ML model has become stale.' },
-            { label: 'Live Streaming', sub: 'SSE — no Redis', desc: 'Server-Sent Events with in-memory queues per substation. Per-meter stability scores updated on every event.' },
-          ].map(s => (
-            <div key={s.label} className="panel">
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--cyan)', marginBottom: 6, letterSpacing: '0.04em' }}>{s.sub}</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>{s.label}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.65 }}>{s.desc}</div>
-            </div>
-          ))}
+          {stack.map(s => {
+            const c = colorMap[s.color]
+            return (
+              <div key={s.label} className="panel panel-glow">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                  <div className="icon-circle icon-circle-sm" style={{ background: c.bg, border: `1px solid ${c.border}` }}>
+                    {s.icon}
+                  </div>
+                  <span className="chip" style={{ color: c.text, background: c.bg, borderColor: c.border }}>{s.sub}</span>
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, letterSpacing: '-0.01em' }}>{s.label}</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.68 }}>{s.desc}</div>
+              </div>
+            )
+          })}
         </div>
       </section>
 
       {/* CTA */}
-      <section style={{ paddingBottom: 80, borderTop: '1px solid var(--border-subtle)', paddingTop: 48, textAlign: 'center' }}>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(22px, 3vw, 34px)', fontWeight: 400, marginBottom: 16 }}>
+      <section style={{ paddingBottom: 88, borderTop: '1px solid var(--border-subtle)', paddingTop: 56, textAlign: 'center' }}>
+        <h2 style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: 'clamp(24px, 3.2vw, 38px)',
+          fontWeight: 700,
+          letterSpacing: '-0.02em',
+          marginBottom: 16,
+          color: 'var(--text-primary)',
+        }}>
           Start with sample data
         </h2>
-        <p style={{ fontSize: 14, color: 'var(--text-secondary)', maxWidth: 480, margin: '0 auto 28px', lineHeight: 1.7 }}>
+        <p style={{ fontSize: 15, color: 'var(--text-secondary)', maxWidth: 500, margin: '0 auto 32px', lineHeight: 1.72 }}>
           Upload the included sample CSV and see physics validation, anomaly detection, and GHI scoring in action in under 2 minutes.
         </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
