@@ -34,6 +34,9 @@ export function CommandBar() {
     { href: '/stream',      label: 'Live' },
     { href: '/inspections', label: 'Inspections' },
     { href: '/governance',  label: 'Governance' },
+    { href: '/grid',        label: 'Grid Map' },
+    { href: '/history',     label: 'History' },
+    { href: '/ai-chat',     label: 'AI Chat' },
     { href: '/docs',        label: 'Docs' },
   ]
 
