@@ -237,6 +237,33 @@ select.input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://ww
 .stagger-4 { animation-delay:.20s; opacity:0; animation-fill-mode:forwards; }
 .stagger-5 { animation-delay:.25s; opacity:0; animation-fill-mode:forwards; }
 
+/* BAR CHART (animated height) */
+.bar-chart { display:flex; align-items:flex-end; gap:4px; height:64px; }
+.bar-chart-bar {
+  flex: 1; border-radius: 3px 3px 0 0; min-width: 4px;
+  animation: growUp 0.6s ease forwards;
+  transform-origin: bottom;
+  opacity: 0.85;
+}
+@keyframes growUp { from { transform:scaleY(0); opacity:0; } to { transform:scaleY(1); opacity:0.85; } }
+@keyframes growRight { from { width:0 !important; opacity:0; } to { opacity:0.9; } }
+
+/* SPARKLINE (mini inline chart) */
+.sparkline { display:inline-flex; align-items:flex-end; gap:2px; height:24px; vertical-align:middle; }
+.sparkline-bar { width:3px; border-radius:1px; flex-shrink:0; animation:growUp 0.4s ease forwards; transform-origin:bottom; }
+
+/* PROGRESS RING */
+@keyframes dashIn { from { stroke-dashoffset: 283; } }
+.progress-ring-circle { animation: dashIn 0.8s ease forwards; }
+
+/* FLOW LINE animation for load-flow diagram */
+@keyframes flowPulse {
+  0%   { stroke-dashoffset: 24; }
+  100% { stroke-dashoffset: 0; }
+}
+.flow-line { animation: flowPulse 1.4s linear infinite; }
+.flow-line-rev { animation: flowPulse 1.4s linear infinite reverse; }
+
 /* FOOTER */
 .footer { border-top:1px solid var(--border-ghost); padding:20px var(--page-pad-x); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
 .footer-text { font-family:var(--font-mono); font-size:10px; color:var(--text-dim); letter-spacing:0.06em; }
@@ -282,6 +309,20 @@ select.input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://ww
   .nav-bar { padding-left: calc(var(--page-pad-x) + env(safe-area-inset-left)); padding-right: calc(var(--page-pad-x) + env(safe-area-inset-right)); }
 }
 body[data-platform="android"] input, body[data-platform="ios"] input { font-size: 16px; }
+
+/* macOS: native scroll momentum */
+body[data-platform="macos"] .table-scroll,
+body[data-platform="ios"]   .table-scroll { -webkit-overflow-scrolling: touch; }
+
+/* Touch devices: remove hover effects that feel broken on tap */
+body[data-touch="true"] .panel:hover,
+body[data-touch="true"] .metric-card:hover { border-color: var(--border-subtle); box-shadow: none; }
+
+/* Windows: adjust scrollbar width for Windows Chrome */
+body[data-platform="windows"] ::-webkit-scrollbar { width: 8px; height: 8px; }
+
+/* iOS safe-area handled globally */
+body[data-platform="ios"] .app-shell { padding-bottom: env(safe-area-inset-bottom); }
 @media (prefers-contrast: high) { :root { --border-subtle: rgba(100,180,255,0.2); --text-secondary: #B0C4D8; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration:.01ms !important; transition-duration:.01ms !important; } }
 

@@ -8,6 +8,74 @@ type Tab = 'drift' | 'aging' | 'audit'
 const DRIFT_COLORS: Record<string, string> = { NONE:'var(--green)', MINOR:'var(--cyan)', MODERATE:'var(--amber)', SEVERE:'var(--red)' }
 const CONDITION_COLORS: Record<string, string> = { GOOD:'var(--green)', FAIR:'var(--cyan)', POOR:'var(--amber)', CRITICAL:'var(--red)' }
 
+/** Animated circular progress gauge */
+function CircleGauge({ value, max = 1, color = 'var(--cyan)', label, size = 88 }: {
+  value: number | null; max?: number; color?: string; label: string; size?: number
+}) {
+  const R = (size / 2) - 8
+  const circ = 2 * Math.PI * R
+  const pct = value != null ? Math.min(value / max, 1) : 0
+  const offset = circ * (1 - pct)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={size / 2} cy={size / 2} r={R} fill="none" stroke="var(--border-subtle)" strokeWidth={6} />
+        <circle
+          cx={size / 2} cy={size / 2} r={R}
+          fill="none" stroke={color} strokeWidth={6}
+          strokeLinecap="round"
+          strokeDasharray={circ}
+          strokeDashoffset={offset}
+          className="progress-ring-circle"
+          style={{ transition: 'stroke-dashoffset 0.9s ease' }}
+        />
+      </svg>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: -4 }}>
+        {label}
+      </div>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color, fontWeight: 500, marginTop: -4 }}>
+        {value != null ? value.toFixed(4) : '—'}
+      </div>
+    </div>
+  )
+}
+
+/** Animated horizontal bar for rate comparison */
+function RateBar({ label, value, max, color = 'var(--cyan)' }: { label: string; value: number; max: number; color?: string }) {
+  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-tertiary)' }}>{label}</span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color }}>{(value * 100).toFixed(1)}%</span>
+      </div>
+      <div style={{ height: 6, background: 'var(--border-ghost)', borderRadius: 3, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3, animation: 'growRight 0.8s ease forwards' }} />
+      </div>
+    </div>
+  )
+}
+
+/** Health index visual bar */
+function HealthBar({ value, label }: { value: number | null; label: string }) {
+  const pct = value != null ? value * 100 : 0
+  const color = pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--amber)' : 'var(--red)'
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color }}>{pct.toFixed(0)}%</span>
+      </div>
+      <div style={{ height: 5, background: 'var(--border-ghost)', borderRadius: 3, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3, animation: 'growRight 0.7s ease forwards' }} />
+      </div>
+    </div>
+  )
+}
+
+/** Inline helper: format a 0-1 value as a percentage string. */
+const fmtPct = (v: number | null | undefined) => v != null ? `${(v * 100).toFixed(0)}%` : '—'
+
 export default function GovernancePage() {
   const [tab, setTab] = useState<Tab>('drift')
   const [drift, setDrift] = useState<DriftResult | null>(null)
@@ -194,33 +262,54 @@ export default function GovernancePage() {
           </div>
           {drift ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Top metrics */}
               <div className="grid-3">
                 <div className="metric-card">
                   <div className="metric-label">Drift Level</div>
                   <div className="metric-value" style={{ color: DRIFT_COLORS[drift.drift_level] || 'var(--cyan)', fontSize: 28 }}>
                     {drift.drift_level}
                   </div>
+                  <div className="metric-sub">{drift.requires_retraining ? '⚠ Retraining needed' : 'Model stable'}</div>
                 </div>
                 <div className="metric-card">
-                  <div className="metric-label">PSI Score</div>
-                  <div className="metric-value">{drift.psi != null ? drift.psi.toFixed(4) : '—'}</div>
-                  <div className="metric-sub">{'<'}0.10 = stable</div>
+                  <div className="metric-label">KS Statistic</div>
+                  <div className="metric-value">{drift.ks_statistic != null ? drift.ks_statistic.toFixed(4) : '—'}</div>
+                  <div className="metric-sub">p = {drift.ks_pvalue != null ? drift.ks_pvalue.toFixed(4) : '—'}</div>
                 </div>
                 <div className="metric-card">
-                  <div className="metric-label">Anomaly Rate Shift</div>
-                  <div className="metric-value" style={{ fontSize: 24, color: drift.rate_shift > 0.05 ? 'var(--red)' : drift.rate_shift < -0.05 ? 'var(--green)' : 'var(--cyan)' }}>
-                    {drift.rate_shift > 0.05 ? '↑' : drift.rate_shift < -0.05 ? '↓' : '→'}
-                  </div>
-                  <div className="metric-sub">{drift.rate_shift != null ? `${(drift.rate_shift * 100).toFixed(1)}%` : '—'}</div>
+                  <div className="metric-label">Data Points</div>
+                  <div className="metric-value" style={{ fontSize: 22 }}>{drift.n_reference + drift.n_evaluation}</div>
+                  <div className="metric-sub">{drift.n_reference} ref · {drift.n_evaluation} eval</div>
                 </div>
               </div>
 
-              {drift.interpretation && (
-                <div className="panel">
-                  <div className="sec-label">Interpretation</div>
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 }}>{drift.interpretation}</p>
+              {/* Visual gauges + rate bars */}
+              <div className="grid-2">
+                <div className="panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', flexWrap: 'wrap', gap: 16, padding: '20px 24px' }}>
+                  <CircleGauge
+                    value={drift.psi}
+                    max={0.25}
+                    color={drift.psi != null && drift.psi > 0.2 ? 'var(--red)' : drift.psi != null && drift.psi > 0.1 ? 'var(--amber)' : 'var(--green)'}
+                    label="PSI"
+                  />
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <div className="sec-label" style={{ marginBottom: 12 }}>Anomaly Rates</div>
+                    <RateBar label="Reference" value={drift.reference_anomaly_rate} max={Math.max(drift.reference_anomaly_rate, drift.current_anomaly_rate, 0.01)} color="var(--cyan)" />
+                    <RateBar label="Current" value={drift.current_anomaly_rate} max={Math.max(drift.reference_anomaly_rate, drift.current_anomaly_rate, 0.01)} color={drift.current_anomaly_rate > drift.reference_anomaly_rate * 1.2 ? 'var(--red)' : 'var(--green)'} />
+                  </div>
                 </div>
-              )}
+                {drift.interpretation && (
+                  <div className="panel">
+                    <div className="sec-label">Interpretation</div>
+                    <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 }}>{drift.interpretation}</p>
+                    {!drift.sufficient_data && (
+                      <div className="alert alert-warn" style={{ marginTop: 12, padding: '6px 12px', fontSize: 11 }}>
+                        Insufficient data for reliable drift estimation
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <div className="panel">
@@ -242,41 +331,67 @@ export default function GovernancePage() {
           </div>
           {/* Fleet aging summary */}
           {fleet && fleet.transformers?.length > 0 && (
-            <div className="panel panel-flush">
-              <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
-                <div className="sec-label" style={{ marginBottom: 0 }}>Fleet Aging Overview</div>
+            <>
+              {/* Fleet health overview */}
+              <div className="grid-3" style={{ marginBottom: 14 }}>
+                <div className="metric-card">
+                  <div className="metric-label">Fleet Avg Health</div>
+                  <div className="metric-value" style={{ color: fleet.avg_health_index != null && fleet.avg_health_index >= 0.7 ? 'var(--green)' : fleet.avg_health_index != null && fleet.avg_health_index >= 0.4 ? 'var(--amber)' : 'var(--red)' }}>
+                    {fmtPct(fleet.avg_health_index)}
+                  </div>
+                </div>
+                <div className="metric-card">
+                  <div className="metric-label">Critical / Poor</div>
+                  <div className="metric-value" style={{ color: (fleet.critical_count + fleet.poor_count) > 0 ? 'var(--red)' : 'var(--green)' }}>
+                    {fleet.critical_count + fleet.poor_count}
+                  </div>
+                  <div className="metric-sub">{fleet.critical_count} critical · {fleet.poor_count} poor</div>
+                </div>
+                <div className="metric-card">
+                  <div className="metric-label">Replace Within 3yr</div>
+                  <div className="metric-value" style={{ color: fleet.replace_within_3yr > 0 ? 'var(--amber)' : 'var(--green)' }}>
+                    {fleet.replace_within_3yr}
+                  </div>
+                </div>
               </div>
-              <div className="table-scroll">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Transformer</th>
-                      <th>Condition</th>
-                      <th className="hide-mobile">Est. Life Left</th>
-                      <th className="hide-mobile">Health Index</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {fleet.transformers?.slice(0, 15).map((t: any, i: number) => (
-                      <tr key={i}>
-                        <td style={{ color: 'var(--cyan)' }}>{t.transformer_tag}</td>
-                        <td>
-                          <span style={{ color: CONDITION_COLORS[t.condition_class] || 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                            {t.condition_class}
-                          </span>
-                        </td>
-                        <td className="hide-mobile">{t.estimated_rul_years != null ? `${t.estimated_rul_years.toFixed(1)} yr` : '—'}</td>
-                        <td className="hide-mobile">{t.health_index != null ? `${(t.health_index * 100).toFixed(0)}%` : '—'}</td>
-                        <td style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>
-                          {t.replacement_flag ? 'Replace' : t.maintenance_flag ? 'Maintenance' : 'Monitor'}
-                        </td>
+              <div className="panel panel-flush">
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+                  <div className="sec-label" style={{ marginBottom: 0 }}>Fleet Aging Overview</div>
+                </div>
+                <div className="table-scroll">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Transformer</th>
+                        <th>Condition</th>
+                        <th className="hide-mobile">Health</th>
+                        <th className="hide-mobile">Est. Life Left</th>
+                        <th>Action</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {fleet.transformers?.slice(0, 15).map((t: any, i: number) => (
+                        <tr key={i}>
+                          <td style={{ color: 'var(--cyan)' }}>{t.transformer_tag}</td>
+                          <td>
+                            <span style={{ color: CONDITION_COLORS[t.condition_class] || 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                              {t.condition_class}
+                            </span>
+                          </td>
+                          <td className="hide-mobile" style={{ minWidth: 120 }}>
+                            <HealthBar value={t.health_index} label="" />
+                          </td>
+                          <td className="hide-mobile">{t.estimated_rul_years != null ? `${t.estimated_rul_years.toFixed(1)} yr` : '—'}</td>
+                          <td style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>
+                            {t.replacement_flag ? <span style={{ color: 'var(--red)' }}>Replace</span> : t.maintenance_flag ? <span style={{ color: 'var(--amber)' }}>Maintenance</span> : 'Monitor'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            </>
           )}
 
           {/* Custom aging calculator */}
@@ -314,15 +429,19 @@ export default function GovernancePage() {
 
             {agingResult && !agingResult.error && (
               <div className="panel panel-elevated" style={{ marginTop: 16 }}>
-                <div className="grid-3">
+                <div className="grid-3" style={{ marginBottom: 14 }}>
                   <div><div className="metric-label">Condition</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, color: CONDITION_COLORS[agingResult.condition_class] || 'var(--cyan)' }}>{agingResult.condition_class}</div></div>
-                  <div><div className="metric-label">Health Index</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, color: 'var(--cyan)' }}>{agingResult.health_index != null ? `${(agingResult.health_index * 100).toFixed(0)}%` : '—'}</div></div>
+                  <div><div className="metric-label">Health Index</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, color: 'var(--cyan)' }}>{fmtPct(agingResult.health_index)}</div></div>
                   <div><div className="metric-label">Remaining Life</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, color: 'var(--cyan)' }}>{agingResult.estimated_rul_years != null ? `${agingResult.estimated_rul_years.toFixed(1)} yr` : '—'}</div></div>
                 </div>
-                <div style={{ marginTop: 12, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                <HealthBar value={agingResult.health_index} label="Health Index" />
+                <div style={{ marginTop: 10, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
                   {agingResult.replacement_flag && <div style={{ color: 'var(--red)' }}>⚠ Replacement recommended</div>}
                   {!agingResult.replacement_flag && agingResult.maintenance_flag && <div style={{ color: 'var(--amber)' }}>⚠ Maintenance required</div>}
                   {!agingResult.replacement_flag && !agingResult.maintenance_flag && <div style={{ color: 'var(--green)' }}>✓ Within normal operating parameters</div>}
+                  <div style={{ marginTop: 6, color: 'var(--text-dim)' }}>
+                    Hotspot: {agingResult.hotspot_temp_c?.toFixed(1)}°C · Failure prob: {agingResult.failure_probability != null ? `${(agingResult.failure_probability * 100).toFixed(1)}%` : '—'}
+                  </div>
                 </div>
               </div>
             )}

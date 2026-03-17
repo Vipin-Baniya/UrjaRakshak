@@ -86,7 +86,11 @@ export const api = {
     fetcher<any>('/api/v1/analysis/stats/summary', { headers: authHeaders() }),
 
   listAnalyses: (params?: { limit?: number; offset?: number }) => {
-    const qs = new URLSearchParams(params as any).toString()
+    const clean: Record<string, string> = {}
+    for (const [k, v] of Object.entries(params ?? {})) {
+      if (v !== undefined && v !== null) clean[k] = String(v)
+    }
+    const qs = new URLSearchParams(clean).toString()
     return fetcher<any>(`/api/v1/analysis/${qs ? '?' + qs : ''}`, { headers: authHeaders() })
   },
 
@@ -251,7 +255,12 @@ export const ghiApi = {
 
 export const inspectionApi = {
   list: (params?: { status?: string; priority?: string; substation_id?: string; limit?: number }) => {
-    const qs = new URLSearchParams(params as any).toString()
+    // Strip undefined/null/empty values so they aren't sent as "undefined" strings
+    const clean: Record<string, string> = {}
+    for (const [k, v] of Object.entries(params ?? {})) {
+      if (v !== undefined && v !== null && v !== '') clean[k] = String(v)
+    }
+    const qs = new URLSearchParams(clean).toString()
     return fetcher<{ total: number; items: Inspection[] }>(
       `/api/v1/inspections/${qs ? '?' + qs : ''}`, { headers: authHeaders() }
     )

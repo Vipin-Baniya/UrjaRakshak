@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { CommandBar } from '@/components/ui/CommandBar'
 import { Footer } from '@/components/ui/Footer'
+import { PlatformDetect } from '@/components/ui/PlatformDetect'
 
 export const metadata: Metadata = {
   title: 'UrjaRakshak — Physics-Based Grid Intelligence',
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body>
+        <PlatformDetect />
         <div className="app-shell">
           <CommandBar />
           <main className="app-main">
