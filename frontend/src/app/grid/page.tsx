@@ -10,6 +10,11 @@ const AnimatedGridMap = dynamic(
   { ssr: false, loading: () => <div style={{ height: 400, background: 'var(--bg-panel)', borderRadius: 'var(--r-lg)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>Initialising grid topology…</div> }
 )
 
+const GridTopologyFlow = dynamic(
+  () => import('@/components/grid/GridTopologyFlow').then((m) => m.GridTopologyFlow),
+  { ssr: false, loading: () => <div style={{ height: 500, background: 'var(--bg-panel)', borderRadius: 'var(--r-lg)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>Loading ReactFlow topology…</div> }
+)
+
 // ── Mock data: realistic Indian electricity grid ──────────────────────────
 
 const MOCK_NODES: GridNode[] = [
@@ -79,6 +84,7 @@ function buildRegions(nodes: GridNode[]): RegionSummary[] {
 
 export default function GridPage() {
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'force' | 'flow'>('flow')
 
   const displayNodes = useMemo(() => {
     if (!selectedRegion) return MOCK_NODES
@@ -100,32 +106,54 @@ export default function GridPage() {
   const criticalCount = MOCK_NODES.filter((n) => n.health === 'critical').length
 
   return (
-    <main className="page">
+    <main className="page grid-bg">
       <div className="page-header">
         <div>
+          <div className="page-eyebrow">⚡ Grid Visualization</div>
           <h1 className="page-title">Grid Topology</h1>
           <p className="page-desc">
-            Real-time force-directed visualisation of substation nodes, transmission lines, and power
+            Real-time visualisation of substation nodes, transmission lines, and power
             flow across India's regional grids. Hover nodes for details.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <button
-            className={`btn btn-secondary${selectedRegion === null ? ' btn-primary' : ''}`}
-            onClick={() => setSelectedRegion(null)}
-          >
-            All Regions
-          </button>
-          {regions.map((r) => (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 12 }}>
+          {/* View mode toggle */}
+          <div style={{ display: 'flex', gap: 4, background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 4 }}>
             <button
-              key={r.name}
-              className={`btn btn-secondary${selectedRegion === r.name ? ' btn-primary' : ''}`}
-              onClick={() => setSelectedRegion(selectedRegion === r.name ? null : r.name)}
-              style={selectedRegion === r.name ? { borderColor: r.color, color: r.color } : {}}
+              className={`btn btn-sm${viewMode === 'flow' ? ' btn-primary' : ' btn-secondary'}`}
+              style={{ border: 'none', padding: '4px 10px' }}
+              onClick={() => setViewMode('flow')}
             >
-              {r.name}
+              Flow Diagram
             </button>
-          ))}
+            <button
+              className={`btn btn-sm${viewMode === 'force' ? ' btn-primary' : ' btn-secondary'}`}
+              style={{ border: 'none', padding: '4px 10px' }}
+              onClick={() => setViewMode('force')}
+            >
+              Force Graph
+            </button>
+          </div>
+          {viewMode === 'force' && (
+            <>
+              <button
+                className={`btn btn-secondary${selectedRegion === null ? ' btn-primary' : ''}`}
+                onClick={() => setSelectedRegion(null)}
+              >
+                All Regions
+              </button>
+              {regions.map((r) => (
+                <button
+                  key={r.name}
+                  className={`btn btn-secondary${selectedRegion === r.name ? ' btn-primary' : ''}`}
+                  onClick={() => setSelectedRegion(selectedRegion === r.name ? null : r.name)}
+                  style={selectedRegion === r.name ? { borderColor: r.color, color: r.color } : {}}
+                >
+                  {r.name}
+                </button>
+              ))}
+            </>
+          )}
         </div>
       </div>
 
@@ -137,16 +165,25 @@ export default function GridPage() {
         <MetricCard label="Critical Nodes"     value={criticalCount}      unit=""     color="var(--red)"   />
       </div>
 
-      {/* Map panel */}
-      <div className="panel" style={{ marginBottom: 24, padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border)' }}>
-          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', margin: 0 }}>
-            Showing {displayNodes.length} substations · {displayEdges.length} transmission links
-            {selectedRegion ? ` · ${selectedRegion} Region` : ' · National Grid'}
-          </p>
+      {/* ReactFlow topology */}
+      {viewMode === 'flow' && (
+        <div style={{ marginBottom: 24 }}>
+          <GridTopologyFlow />
         </div>
-        <AnimatedGridMap nodes={displayNodes} edges={displayEdges} />
-      </div>
+      )}
+
+      {/* Force-directed map */}
+      {viewMode === 'force' && (
+        <div className="panel glass" style={{ marginBottom: 24, padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border)' }}>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', margin: 0 }}>
+              Showing {displayNodes.length} substations · {displayEdges.length} transmission links
+              {selectedRegion ? ` · ${selectedRegion} Region` : ' · National Grid'}
+            </p>
+          </div>
+          <AnimatedGridMap nodes={displayNodes} edges={displayEdges} />
+        </div>
+      )}
 
       {/* Region cards */}
       <h2 style={{ fontFamily: 'var(--font-ui)', fontSize: 15, color: 'var(--text-secondary)', marginBottom: 14, fontWeight: 500, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
@@ -156,7 +193,7 @@ export default function GridPage() {
         {regions.map((r) => (
           <div
             key={r.name}
-            className="panel-elevated"
+            className="panel-elevated glass"
             style={{
               cursor: 'pointer',
               borderLeft: `3px solid ${r.color}`,
