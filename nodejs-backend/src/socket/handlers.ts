@@ -24,7 +24,7 @@ function generateLiveEvent(substationId: string): LiveEvent {
   const isAnomaly = Math.random() < 0.04
   return {
     substationId,
-    meterId: `${METER_PREFIX}-${substationId}-${String(Math.floor(Math.random() * 10) + 1).padStart(3, '0')}`,
+    meterId: `${METER_PREFIX}-${substationId}-${String(Math.floor(Math.random() * 100) + 1).padStart(3, '0')}`,
     energyKwh: +(Math.random() * 900 + 100).toFixed(2),
     voltageKv: +(Math.random() * 12 + 215).toFixed(2),
     currentA: +(Math.random() * 60 + 80).toFixed(2),
