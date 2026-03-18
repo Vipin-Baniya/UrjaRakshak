@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
+import { parseApiError } from '@/lib/api'
 
 const BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
@@ -35,7 +36,9 @@ async function apiFetch<T>(path: string, body: object): Promise<T> {
     )
   }
   const json = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(json?.detail || json?.message || `HTTP ${res.status}`)
+  if (!res.ok) {
+    throw new Error(parseApiError(json) || `HTTP ${res.status}`)
+  }
   return json as T
 }
 

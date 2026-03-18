@@ -8,6 +8,18 @@
 // Next.js dev server (which has no /api/v1 routes).
 const BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
+/**
+ * Parse a FastAPI error response body into a human-readable string.
+ * Handles both plain string detail and Pydantic validation arrays.
+ */
+export function parseApiError(body: any): string {
+  const detail = body?.detail
+  if (Array.isArray(detail)) {
+    return detail.map((d: any) => d.msg || d.message || JSON.stringify(d)).join('; ')
+  }
+  return detail || body?.message || ''
+}
+
 async function fetcher<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response
   try {
@@ -34,7 +46,8 @@ async function fetcher<T>(path: string, init?: RequestInit): Promise<T> {
         localStorage.removeItem('urjarakshak_user_id')
       }
     }
-    throw new Error(body?.detail || body?.message || `HTTP ${res.status}`)
+    // Pydantic validation errors return detail as an array of objects
+    throw new Error(parseApiError(body) || `HTTP ${res.status}`)
   }
   return res.json()
 }
@@ -145,7 +158,7 @@ export const api = {
         localStorage.removeItem('urjarakshak_role')
         localStorage.removeItem('urjarakshak_user_id')
       }
-      throw new Error(body?.detail || body?.message || `HTTP ${res.status}`)
+      throw new Error(parseApiError(body) || `HTTP ${res.status}`)
     }
     return res.json()
   },
