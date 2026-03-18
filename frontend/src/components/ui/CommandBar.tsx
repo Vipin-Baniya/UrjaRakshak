@@ -26,15 +26,16 @@ export function CommandBar() {
   }, [menuOpen])
 
   const nav = [
-    { href: '/',          label: 'Home' },
-    { href: '/dashboard', label: 'Dashboard' },
-    { href: '/grid',      label: 'Grid Map' },
-    { href: '/upload',    label: 'Upload' },
-    { href: '/analysis',  label: 'Analysis' },
-    { href: '/history',   label: 'History' },
-    { href: '/stream',    label: 'Live' },
-    { href: '/ai-chat',   label: 'AI Chat' },
-    { href: '/docs',      label: 'Docs' },
+    { href: '/',            label: 'Home' },
+    { href: '/dashboard',   label: 'Dashboard' },
+    { href: '/simulation',  label: '⚡ Simulation' },
+    { href: '/story',       label: '📖 Story' },
+    { href: '/grid',        label: 'Grid Map' },
+    { href: '/upload',      label: 'Upload' },
+    { href: '/analysis',    label: 'Analysis' },
+    { href: '/stream',      label: 'Live' },
+    { href: '/ai-chat',     label: 'AI Chat' },
+    { href: '/docs',        label: 'Docs' },
   ]
 
   const liveState = isLive === null ? 'checking' : isLive ? 'online' : 'offline'
