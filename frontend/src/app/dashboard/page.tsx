@@ -236,11 +236,17 @@ export default function Dashboard() {
         >
           <div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--amber)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>🔍 Inspector View</div>
-            <div style={{ fontSize: 13.5, color: 'var(--text-secondary)' }}>2 active theft alerts need your attention. Sector 12 and Sector 8 are flagged high-risk.</div>
+            <div style={{ fontSize: 13.5, color: 'var(--text-secondary)' }}>
+              {data?.high_risk_substations?.length
+                ? `${data.high_risk_substations.length} high-risk substation${data.high_risk_substations.length > 1 ? 's' : ''} flagged: ${data.high_risk_substations.slice(0, 3).map(r => r.substation).join(', ')}.`
+                : agg?.total_anomaly_checks
+                  ? `${agg.anomalies_flagged ?? 0} anomalies flagged across ${agg.total_analyses ?? 0} analyses.`
+                  : 'Upload meter data to see anomaly alerts for inspection.'}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <Link href="/simulation" className="btn btn-secondary btn-sm">View Simulation →</Link>
-            <Link href="/story" className="btn btn-secondary btn-sm" style={{ borderColor: 'var(--amber)', color: 'var(--amber)' }}>Run Investigation →</Link>
+            <Link href="/anomaly" className="btn btn-secondary btn-sm" style={{ borderColor: 'var(--amber)', color: 'var(--amber)' }}>Anomaly Detection →</Link>
+            <Link href="/analysis" className="btn btn-secondary btn-sm">Run Analysis →</Link>
           </div>
         </motion.div>
       )}
@@ -254,10 +260,15 @@ export default function Dashboard() {
         >
           <div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>🏠 Consumer View</div>
-            <div style={{ fontSize: 13.5, color: 'var(--text-secondary)' }}>Your meter MTR-2180 is healthy. This month: 312 kWh · Estimated bill: ₹1,872. Next reading in 4 days.</div>
+            <div style={{ fontSize: 13.5, color: 'var(--text-secondary)' }}>
+              {data?.latest_batch
+                ? `Latest meter batch: ${data.latest_batch.filename}. Readings: ${data.latest_batch.row_count?.toLocaleString() ?? '—'}. Anomalies detected: ${data.latest_batch.anomalies_detected ?? 0}.`
+                : 'No meter data uploaded yet. Upload a CSV to track your usage and billing estimates.'}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-secondary btn-sm" style={{ borderColor: 'var(--green)', color: 'var(--green)' }}>View My Usage →</button>
+            <Link href="/upload" className="btn btn-secondary btn-sm" style={{ borderColor: 'var(--green)', color: 'var(--green)' }}>Upload Meter Data →</Link>
+            <Link href="/analysis" className="btn btn-secondary btn-sm">View Analysis →</Link>
           </div>
         </motion.div>
       )}
@@ -271,11 +282,15 @@ export default function Dashboard() {
         >
           <div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--cyan)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>🏛 Admin View — DISCOM Control Room</div>
-            <div style={{ fontSize: 13.5, color: 'var(--text-secondary)' }}>Fleet health: 87% GHI. 3 suspicious meters auto-flagged. 12 open inspections. Estimated daily theft loss: ₹28K.</div>
+            <div style={{ fontSize: 13.5, color: 'var(--text-secondary)' }}>
+              {ghiData?.has_data
+                ? `Fleet GHI: ${ghiData.avg_ghi_all_time ?? '—'}. ${ghiData.open_inspections ?? 0} open inspection${(ghiData.open_inspections ?? 0) !== 1 ? 's' : ''}${ghiData.critical_open ? `, ${ghiData.critical_open} critical` : ''}. ${agg?.anomalies_flagged ?? 0} anomalies flagged.`
+                : `${agg?.total_analyses ?? 0} analyses run. ${agg?.anomalies_flagged ?? 0} anomalies flagged. Upload meter data to generate GHI scores.`}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-secondary btn-sm" onClick={() => setActiveTab('theft')}>View Theft AI →</button>
-            <Link href="/simulation" className="btn btn-secondary btn-sm">Grid Simulation →</Link>
+            <Link href="/grid" className="btn btn-secondary btn-sm">Grid Map →</Link>
           </div>
         </motion.div>
       )}

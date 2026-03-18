@@ -23,8 +23,10 @@ const QUICK_PROMPTS = [
 async function* streamAIResponse(substationId: string, message: string): AsyncGenerator<string> {
   // Use the new /chat endpoint for conversational AI responses
   const token = typeof window !== 'undefined' ? localStorage.getItem('urjarakshak_token') : null
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (token) headers['Authorization'] = `Bearer ${token}`
+  if (!token) {
+    throw new Error('Authentication required. Please log in at /login to use the AI assistant.')
+  }
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
 
   try {
     const res = await fetch(`${BASE}/api/v1/ai/chat`, {

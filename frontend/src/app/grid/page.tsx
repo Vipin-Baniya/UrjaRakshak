@@ -91,6 +91,7 @@ interface RegionSummary {
   name: string
   color: string
   nodes: string[]
+  nodeIds: string[]
   totalLoad: number
   alerts: number
 }
@@ -103,6 +104,7 @@ function buildRegions(nodes: GridNode[]): RegionSummary[] {
       name: 'Uploaded Substations',
       color: '#00D4FF',
       nodes: nodes.map((n) => n.label),
+      nodeIds: nodes.map((n) => n.id),
       totalLoad: nodes.reduce((s, n) => s + n.load, 0),
       alerts: nodes.filter((n) => n.health !== 'healthy').length,
     }]
@@ -119,6 +121,7 @@ function buildRegions(nodes: GridNode[]): RegionSummary[] {
       name: r.name,
       color: r.color,
       nodes: regionNodes.map((n) => n.label),
+      nodeIds: regionNodes.map((n) => n.id),
       totalLoad: regionNodes.reduce((s, n) => s + n.load, 0),
       alerts: regionNodes.filter((n) => n.health !== 'healthy').length,
     }
@@ -159,23 +162,22 @@ export default function GridPage() {
     fetchData()
   }, [])
 
+  const regions = useMemo(() => buildRegions(allNodes), [allNodes])
+
   const displayNodes = useMemo(() => {
     if (!selectedRegion) return allNodes
-    // For region-filtered fallback data
-    const prefix = { North: 'NR-', West: 'WR-', South: 'SR-', East: 'ER-' }[selectedRegion]
-    if (prefix) {
-      const ids = new Set(allNodes.filter((n) => n.id.startsWith(prefix)).map((n) => n.id))
+    const region = regions.find((r) => r.name === selectedRegion)
+    if (region) {
+      const ids = new Set(region.nodeIds)
       return allNodes.filter((n) => ids.has(n.id))
     }
-    return allNodes.filter((n) => n.id.startsWith(selectedRegion))
-  }, [selectedRegion, allNodes])
+    return allNodes
+  }, [selectedRegion, allNodes, regions])
 
   const displayEdges = useMemo(() => {
     const ids = new Set(displayNodes.map((n) => n.id))
     return allEdges.filter((e) => ids.has(e.source) && ids.has(e.target))
   }, [displayNodes, allEdges])
-
-  const regions = useMemo(() => buildRegions(allNodes), [allNodes])
 
   const totalLoad    = allNodes.reduce((s, n) => s + n.load, 0)
   const activeAlerts = allNodes.filter((n) => n.health !== 'healthy').length
@@ -219,7 +221,7 @@ export default function GridPage() {
           {viewMode === 'force' && (
             <>
               <button
-                className={`btn btn-secondary${selectedRegion === null ? ' btn-primary' : ''}`}
+                className={`btn ${selectedRegion === null ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setSelectedRegion(null)}
               >
                 All Regions
@@ -227,7 +229,7 @@ export default function GridPage() {
               {regions.map((r) => (
                 <button
                   key={r.name}
-                  className={`btn btn-secondary${selectedRegion === r.name ? ' btn-primary' : ''}`}
+                  className={`btn ${selectedRegion === r.name ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => setSelectedRegion(selectedRegion === r.name ? null : r.name)}
                   style={selectedRegion === r.name ? { borderColor: r.color, color: r.color } : {}}
                 >

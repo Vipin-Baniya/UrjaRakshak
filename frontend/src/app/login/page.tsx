@@ -22,11 +22,18 @@ const SECURITY_QUESTIONS = [
 type Tab = 'login' | 'register' | 'forgot'
 
 async function apiFetch<T>(path: string, body: object): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  let res: Response
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  } catch {
+    throw new Error(
+      `Cannot reach the backend at ${BASE}. Make sure the backend is running: cd backend && uvicorn app.main:app --reload --port 8000`
+    )
+  }
   const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(json?.detail || json?.message || `HTTP ${res.status}`)
   return json as T
