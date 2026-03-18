@@ -8,12 +8,23 @@ import { api, DashboardData, ghiApi, GHIDashboard } from '@/lib/api'
 import { AIAnalysisPanel } from '@/components/ui/AIAnalysisPanel'
 import { FaultSimulator } from '@/components/ui/FaultSimulator'
 import { LiveMetricsChart } from '@/components/charts/LiveMetricsChart'
+import { TheftDetectionPanel } from '@/components/ui/TheftDetectionPanel'
 
 // Lazy-load heavy SVG component (SSR-safe)
 const PowerFlowAnimation = dynamic(
   () => import('@/components/ui/PowerFlowAnimation').then(m => m.PowerFlowAnimation),
   { ssr: false, loading: () => <div className="panel" style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>Loading power flow…</div> }
 )
+
+const TABS = [
+  { key: 'overview',  label: '📊 Overview'     },
+  { key: 'theft',     label: '🤖 Theft AI'     },
+  { key: 'powerflow', label: '⚡ Power Flow'    },
+  { key: 'ai',        label: '🧠 AI Analysis'   },
+  { key: 'faults',    label: '🔌 Fault Sim'     },
+] as const
+
+type TabKey = typeof TABS[number]['key']
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null)
@@ -22,7 +33,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastFetched, setLastFetched] = useState('')
-  const [activeTab, setActiveTab] = useState<'overview' | 'powerflow' | 'ai' | 'faults'>('overview')
+  const [activeTab, setActiveTab] = useState<TabKey>('overview')
+  const [role, setRole] = useState<'admin' | 'inspector' | 'consumer'>('admin')
 
   const fetchData = useCallback(async () => {
     try {
@@ -73,13 +85,6 @@ export default function Dashboard() {
     return 'var(--green)'
   }
 
-  const TABS = [
-    { key: 'overview',  label: '📊 Overview'    },
-    { key: 'powerflow', label: '⚡ Power Flow'   },
-    { key: 'ai',        label: '🧠 AI Analysis'  },
-    { key: 'faults',    label: '⚡ Fault Sim'    },
-  ] as const
-
   return (
     <div className="page grid-bg">
       {/* Scan line decorative element */}
@@ -128,6 +133,47 @@ export default function Dashboard() {
           <Link href="/upload" className="btn btn-primary">Upload CSV →</Link>
         </div>
       )}
+
+      {/* Role selector */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.05 }}
+        style={{ marginBottom: 20 }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>View as</span>
+          {([
+            { key: 'admin',     label: '🏛  DISCOM Admin',     desc: 'Grid view, all alerts' },
+            { key: 'inspector', label: '🔍  Field Inspector',   desc: 'Alerts + dispatch' },
+            { key: 'consumer',  label: '🏠  Consumer',          desc: 'Usage + bill' },
+          ] as const).map(r => (
+            <button
+              key={r.key}
+              onClick={() => setRole(r.key)}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 'var(--r-md)',
+                border: `1px solid ${role === r.key ? 'var(--cyan)' : 'var(--border-subtle)'}`,
+                background: role === r.key ? 'var(--cyan-dim)' : 'transparent',
+                color: role === r.key ? 'var(--cyan)' : 'var(--text-tertiary)',
+                fontFamily: 'var(--font-ui)',
+                fontSize: 12,
+                fontWeight: role === r.key ? 600 : 400,
+                cursor: 'pointer',
+                transition: 'all 0.18s',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                gap: 2,
+              }}
+            >
+              <span>{r.label}</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: role === r.key ? 'var(--cyan)' : 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{r.desc}</span>
+            </button>
+          ))}
+        </div>
+      </motion.div>
 
       {/* Primary KPIs */}
       <motion.div
@@ -178,6 +224,61 @@ export default function Dashboard() {
           </button>
         ))}
       </div>
+
+      {/* Role-specific action banner */}
+      {role === 'inspector' && (
+        <motion.div
+          key="inspector-banner"
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="panel"
+          style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, borderColor: 'rgba(255,176,32,0.35)', background: 'rgba(255,176,32,0.04)' }}
+        >
+          <div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--amber)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>🔍 Inspector View</div>
+            <div style={{ fontSize: 13.5, color: 'var(--text-secondary)' }}>2 active theft alerts need your attention. Sector 12 and Sector 8 are flagged high-risk.</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Link href="/simulation" className="btn btn-secondary btn-sm">View Simulation →</Link>
+            <Link href="/story" className="btn btn-secondary btn-sm" style={{ borderColor: 'var(--amber)', color: 'var(--amber)' }}>Run Investigation →</Link>
+          </div>
+        </motion.div>
+      )}
+      {role === 'consumer' && (
+        <motion.div
+          key="consumer-banner"
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="panel"
+          style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, borderColor: 'rgba(0,224,150,0.35)', background: 'rgba(0,224,150,0.04)' }}
+        >
+          <div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>🏠 Consumer View</div>
+            <div style={{ fontSize: 13.5, color: 'var(--text-secondary)' }}>Your meter MTR-2180 is healthy. This month: 312 kWh · Estimated bill: ₹1,872. Next reading in 4 days.</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary btn-sm" style={{ borderColor: 'var(--green)', color: 'var(--green)' }}>View My Usage →</button>
+          </div>
+        </motion.div>
+      )}
+      {role === 'admin' && (
+        <motion.div
+          key="admin-banner"
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="panel"
+          style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, borderColor: 'rgba(0,212,255,0.35)', background: 'rgba(0,212,255,0.04)' }}
+        >
+          <div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--cyan)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>🏛 Admin View — DISCOM Control Room</div>
+            <div style={{ fontSize: 13.5, color: 'var(--text-secondary)' }}>Fleet health: 87% GHI. 3 suspicious meters auto-flagged. 12 open inspections. Estimated daily theft loss: ₹28K.</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setActiveTab('theft')}>View Theft AI →</button>
+            <Link href="/simulation" className="btn btn-secondary btn-sm">Grid Simulation →</Link>
+          </div>
+        </motion.div>
+      )}
 
       {/* ── OVERVIEW TAB ── */}
       {activeTab === 'overview' && (
@@ -391,6 +492,20 @@ export default function Dashboard() {
               <Link href="/docs" className="btn btn-secondary btn-sm">API Docs</Link>
               <Link href="/grid" className="btn btn-secondary btn-sm">Grid Topology →</Link>
             </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ── THEFT AI TAB ── */}
+      {activeTab === 'theft' && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+          style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+        >
+          <div className="panel">
+            <TheftDetectionPanel />
           </div>
         </motion.div>
       )}
