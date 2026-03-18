@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func
 
@@ -487,3 +488,59 @@ async def evaluate_reading_vs_forecast(
     result = _forecast_engine_inst.evaluate_reading(model, actual_kwh, ts, reference_ts)
     result["meter_id"] = meter_id
     return result
+
+
+# ── Conversational AI Chat ────────────────────────────────────────────────
+
+class ChatRequest(BaseModel):
+    substation_id: str
+    question: str
+
+
+@router.post("/chat")
+async def ai_chat(
+    request: ChatRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> Dict[str, Any]:
+    """
+    Conversational AI chat endpoint.
+    Accepts a substation_id and free-form question.
+    Fetches the latest analysis as context, then answers using the AI engine.
+    """
+    engine = get_ai_engine()
+
+    # Build context string from latest analysis (if available)
+    context: Optional[str] = None
+    analysis = (await db.execute(
+        select(Analysis)
+        .where(Analysis.substation_id == request.substation_id)
+        .order_by(desc(Analysis.created_at))
+        .limit(1)
+    )).scalar_one_or_none()
+
+    if analysis:
+        context = (
+            f"Substation: {request.substation_id}\n"
+            f"Latest analysis ({analysis.created_at.strftime('%Y-%m-%d %H:%M') if analysis.created_at else 'N/A'}):\n"
+            f"  Input energy:     {analysis.input_energy_mwh or 0:.2f} MWh\n"
+            f"  Output energy:    {analysis.output_energy_mwh or 0:.2f} MWh\n"
+            f"  Residual loss:    {analysis.residual_percentage or 0:.2f}%\n"
+            f"  Balance status:   {analysis.balance_status or 'unknown'}\n"
+            f"  Confidence:       {(analysis.confidence_score or 0) * 100:.0f}%\n"
+        )
+    else:
+        context = (
+            f"Substation: {request.substation_id}\n"
+            "No analysis data found for this substation yet. "
+            "The user may need to upload meter data and run a physics analysis first."
+        )
+
+    result = engine.chat_answer(question=request.question, context=context)
+    return {
+        "answer": result["answer"],
+        "model": result["model"],
+        "substation_id": request.substation_id,
+        "has_context": analysis is not None,
+        "error": result.get("error"),
+    }

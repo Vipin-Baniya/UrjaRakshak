@@ -468,6 +468,94 @@ class AIInterpretationEngine:
             error=reason,
         )
 
+    def chat_answer(self, question: str, context: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Conversational AI response. Returns {answer, model, error}.
+        Uses CHAT_SYSTEM_PROMPT for free-form responses (not bounded JSON schema).
+        Falls back to a helpful offline message when no API key is configured.
+        """
+        if not self.is_configured:
+            return {
+                "answer": (
+                    "AI is currently in offline mode. To enable live AI responses, "
+                    "configure OPENAI_API_KEY or ANTHROPIC_API_KEY in the environment. "
+                    f"Your question was: \"{question}\". "
+                    "In offline mode I can confirm the physics engine, anomaly detection, "
+                    "and GHI scoring are all running normally."
+                ),
+                "model": "offline",
+                "error": None,
+            }
+
+        user_msg = question
+        if context:
+            user_msg = f"Context:\n{context}\n\nQuestion: {question}"
+
+        try:
+            if self.preferred_provider == "openai":
+                return self._chat_openai(user_msg)
+            else:
+                return self._chat_anthropic(user_msg)
+        except Exception as e:
+            logger.warning("Chat call failed: %s", e)
+            return {
+                "answer": (
+                    f"I encountered an error reaching the AI service: {str(e)[:120]}. "
+                    "Please check that the API key is valid and the service is reachable."
+                ),
+                "model": self.preferred_provider,
+                "error": str(e)[:200],
+            }
+
+    def _chat_openai(self, user_msg: str) -> Dict[str, Any]:
+        from openai import OpenAI
+        client = OpenAI(api_key=self._openai_key)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.4,
+            max_tokens=500,
+            messages=[
+                {"role": "system", "content": CHAT_SYSTEM_PROMPT},
+                {"role": "user", "content": user_msg},
+            ],
+        )
+        return {
+            "answer": response.choices[0].message.content or "No response.",
+            "model": "gpt-4o-mini",
+            "error": None,
+        }
+
+    def _chat_anthropic(self, user_msg: str) -> Dict[str, Any]:
+        import anthropic
+        client = anthropic.Anthropic(api_key=self._anthropic_key)
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=500,
+            temperature=0.4,
+            system=CHAT_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_msg}],
+        )
+        content = response.content[0].text if response.content else "No response."
+        return {
+            "answer": content,
+            "model": "claude-haiku-4-5",
+            "error": None,
+        }
+
+
+# ── Conversational chat prompt ────────────────────────────────────────────
+
+CHAT_SYSTEM_PROMPT = """\
+You are UrjaRakshak, an intelligent grid analytics assistant for an energy utility.
+You help engineers understand energy loss patterns, anomaly alerts, grid health, and infrastructure risks.
+
+Guidelines:
+- Answer concisely and clearly in plain English (2-4 sentences unless more detail is needed).
+- Stay infrastructure-scoped. Never speculate about individuals.
+- If no analysis data is available, give general guidance based on the question.
+- Be helpful, professional, and precise.
+"""
+
 
 # ── Singleton (keys injected at startup) ─────────────────────────────────
 _ai_engine: Optional[AIInterpretationEngine] = None

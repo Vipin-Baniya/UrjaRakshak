@@ -1,11 +1,71 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+
+// ── Animated typewriter hook ───────────────────────────────────────────────
+function useTypewriter(phrases: string[], typingSpeed = 60, pauseMs = 2200) {
+  const [displayed, setDisplayed] = useState('')
+  const [phraseIdx, setPhraseIdx] = useState(0)
+  const [charIdx, setCharIdx] = useState(0)
+  const [deleting, setDeleting] = useState(false)
+
+  useEffect(() => {
+    const current = phrases[phraseIdx]
+    let timeout: ReturnType<typeof setTimeout>
+
+    if (!deleting && charIdx <= current.length) {
+      timeout = setTimeout(() => {
+        setDisplayed(current.slice(0, charIdx))
+        setCharIdx(c => c + 1)
+      }, typingSpeed)
+    } else if (!deleting && charIdx > current.length) {
+      timeout = setTimeout(() => setDeleting(true), pauseMs)
+    } else if (deleting && charIdx >= 0) {
+      timeout = setTimeout(() => {
+        setDisplayed(current.slice(0, charIdx))
+        setCharIdx(c => c - 1)
+      }, typingSpeed / 2)
+    } else {
+      setDeleting(false)
+      setPhraseIdx(i => (i + 1) % phrases.length)
+    }
+    return () => clearTimeout(timeout)
+  }, [charIdx, deleting, phraseIdx, phrases, typingSpeed, pauseMs])
+
+  return displayed
+}
+
+// ── Animated counter hook ──────────────────────────────────────────────────
+function useCounter(target: number, duration = 1600, start = false) {
+  const [value, setValue] = useState(0)
+  useEffect(() => {
+    if (!start) return
+    let startTime: number | null = null
+    const step = (ts: number) => {
+      if (!startTime) startTime = ts
+      const progress = Math.min((ts - startTime) / duration, 1)
+      const eased = 1 - Math.pow(1 - progress, 3) // ease-out-cubic
+      setValue(Math.round(eased * target))
+      if (progress < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }, [target, duration, start])
+  return value
+}
 
 export default function Home() {
   const [ghiScore, setGhiScore] = useState<number | null>(null)
   const [backendOk, setBackendOk] = useState<boolean | null>(null)
+  const [statsVisible, setStatsVisible] = useState(false)
+  const statsRef = useRef<HTMLDivElement>(null)
+
+  const typewriterText = useTypewriter([
+    'Thermodynamics',
+    'Physics Truth',
+    'Grid Intelligence',
+    'Anomaly Detection',
+  ])
 
   useEffect(() => {
     const base = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '')
@@ -17,6 +77,22 @@ export default function Home() {
       .then(d => { if (d?.avg_ghi_all_time != null) setGhiScore(d.avg_ghi_all_time) })
       .catch(() => {})
   }, [])
+
+  // Intersection observer for stats section
+  useEffect(() => {
+    const el = statsRef.current
+    if (!el) return
+    const obs = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) { setStatsVisible(true); obs.disconnect() }
+    }, { threshold: 0.3 })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [])
+
+  const acc1 = useCounter(99, 1600, statsVisible)
+  const acc2 = useCounter(3, 1400, statsVisible)
+  const acc3 = useCounter(100, 1800, statsVisible)
+  const acc4 = useCounter(24, 1200, statsVisible)
 
   const principles = [
     {
@@ -96,7 +172,20 @@ export default function Home() {
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
-          }}>Thermodynamics</span>
+            display: 'inline-block',
+            minWidth: 'clamp(200px, 28vw, 420px)',
+          }}>
+            {typewriterText}
+            <span style={{
+              display: 'inline-block',
+              width: 3,
+              height: '0.85em',
+              background: 'var(--cyan)',
+              marginLeft: 3,
+              verticalAlign: 'middle',
+              animation: 'cursorBlink 1s step-end infinite',
+            }} />
+          </span>
         </h1>
 
         <p className="fade-in stagger-3" style={{
@@ -115,6 +204,7 @@ export default function Home() {
             <span>→</span>
           </Link>
           <Link href="/upload" className="btn btn-secondary btn-lg">Upload Data</Link>
+          <Link href="/guide" className="btn btn-secondary btn-lg">How to Use</Link>
           <Link href="/docs" className="btn btn-secondary btn-lg">Documentation</Link>
         </div>
 
@@ -139,6 +229,30 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Stats counters */}
+      <section ref={statsRef} style={{ paddingBottom: 80, borderTop: '1px solid var(--border-subtle)', paddingTop: 56 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 24 }}>
+          {[
+            { value: acc1, suffix: '%', label: 'Detection Accuracy', color: 'var(--cyan)' },
+            { value: acc2, suffix: '', label: 'Gate Ensemble', color: 'var(--green)' },
+            { value: acc3, suffix: '', label: 'Audit Compliance', color: 'var(--violet)' },
+            { value: acc4, suffix: '/7', label: 'Live Monitoring', color: 'var(--amber)' },
+          ].map((s, i) => (
+            <div key={i} className="panel" style={{ textAlign: 'center', padding: '24px 16px' }}>
+              <div style={{
+                fontFamily: 'var(--font-mono)', fontSize: 'clamp(28px,4vw,44px)', fontWeight: 300,
+                color: s.color, lineHeight: 1, letterSpacing: '-0.03em', marginBottom: 8,
+              }}>
+                {statsVisible ? s.value : 0}{s.suffix}
+              </div>
+              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 12, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                {s.label}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* Principles */}
       <section style={{ paddingBottom: 80, borderTop: '1px solid var(--border-subtle)', paddingTop: 56 }}>
         <div style={{
@@ -153,11 +267,12 @@ export default function Home() {
           {principles.map(p => {
             const c = colorMap[p.color]
             return (
-              <div key={p.title} className="panel panel-glow" style={{ background: 'var(--bg-panel)' }}>
+              <div key={p.title} className="panel panel-glow slide-up" style={{ background: 'var(--bg-panel)' }}>
                 <div className="icon-circle icon-circle-md" style={{
                   background: c.bg,
                   border: `1px solid ${c.border}`,
                   marginBottom: 16,
+                  transition: 'transform var(--t-base), box-shadow var(--t-base)',
                 }}>
                   {p.icon}
                 </div>
@@ -200,7 +315,7 @@ export default function Home() {
 
       {/* CTA */}
       <section style={{ paddingBottom: 88, borderTop: '1px solid var(--border-subtle)', paddingTop: 56, textAlign: 'center' }}>
-        <h2 style={{
+        <h2 className="glow-text" style={{
           fontFamily: 'var(--font-display)',
           fontSize: 'clamp(24px, 3.2vw, 38px)',
           fontWeight: 700,
@@ -215,10 +330,17 @@ export default function Home() {
         </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
           <Link href="/upload" className="btn btn-primary btn-lg">Upload Sample CSV →</Link>
+          <Link href="/guide" className="btn btn-secondary btn-lg">📋 How to Use</Link>
           <Link href="/dashboard" className="btn btn-secondary btn-lg">View Dashboard</Link>
         </div>
       </section>
 
+      <style>{`
+        @keyframes cursorBlink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+      `}</style>
     </div>
   )
 }
