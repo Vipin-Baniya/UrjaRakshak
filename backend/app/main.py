@@ -164,16 +164,16 @@ app = FastAPI(
 # CORS (Frontend access)
 # ─────────────────────────────────────────────────────────────
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://urjarakshak.vercel.app",
-        "http://localhost:3000"
-    ],
+_cors_kwargs: dict = dict(
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+if settings.CORS_ALLOW_ORIGIN_REGEX:
+    _cors_kwargs["allow_origin_regex"] = settings.CORS_ALLOW_ORIGIN_REGEX
+
+app.add_middleware(CORSMiddleware, **_cors_kwargs)
 
 
 # ─────────────────────────────────────────────────────────────

@@ -2,6 +2,9 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
   "framework": "nextjs",
+  "env": {
+    "NEXT_PUBLIC_API_URL": "https://urjarakshak-api.onrender.com"
+  },
   "rewrites": [
     {
       "source": "/api/:path*",

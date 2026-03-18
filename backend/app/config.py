@@ -59,7 +59,11 @@ class Settings(BaseSettings):
 
     # ── CORS ─────────────────────────────────────────────────────────────
     ALLOWED_ORIGINS: List[str] = Field(
-        default=["http://localhost:3000", "http://localhost:3001"]
+        default=[
+            "https://urjarakshak.vercel.app",
+            "http://localhost:3000",
+            "http://localhost:3001",
+        ]
     )
     CORS_ALLOW_ORIGIN_REGEX: Optional[str] = Field(default=None)
 
