@@ -17,6 +17,7 @@ Fixes:
 import logging
 import re
 from typing import AsyncGenerator
+from urllib.parse import urlparse
 
 from sqlalchemy.ext.asyncio import (
     create_async_engine,
@@ -46,7 +47,13 @@ def _build_database_url() -> tuple[str, bool]:
     if url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+asyncpg://", 1)
 
-    is_supabase = ".supabase.co" in url
+    # Detect Supabase by inspecting the hostname (covers both direct connections
+    # via *.supabase.co and pooler connections via *.pooler.supabase.com).
+    try:
+        _hostname = urlparse(url.replace("postgresql+asyncpg://", "postgresql://")).hostname or ""
+    except Exception:
+        _hostname = url
+    is_supabase = _hostname.endswith(".supabase.co") or _hostname.endswith(".supabase.com")
 
     # remove sslmode query if present
     url = re.sub(r"[?&]sslmode=[^&]*", "", url).rstrip("?&")

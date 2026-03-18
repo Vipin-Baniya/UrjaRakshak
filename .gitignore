@@ -21,6 +21,11 @@ env/
 *.db
 *.sqlite3
 
+# ML model artifacts
+*.joblib
+*.pkl
+*.pickle
+
 # Logs
 *.log
 logs/
