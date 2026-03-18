@@ -332,11 +332,6 @@ export default function SimulationPage() {
     return () => clearInterval(id)
   }, [])
 
-  const theftZones         = zones.filter(z => z.status === 'theft')
-  const warningZones       = zones.filter(z => z.status === 'warning')
-  const investigatingZones = zones.filter(z => z.status === 'investigating')
-  const totalLoss          = theftZones.reduce((s, z) => s + (z.expected - z.consumption), 0)
-
   if (loading) {
     return (
       <div className="page grid-bg" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400 }}>
