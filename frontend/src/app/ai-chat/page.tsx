@@ -146,7 +146,7 @@ export default function AiChatPage() {
   }
 
   return (
-    <main className="page" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - var(--nav-h) - 60px)' }}>
+    <main className="page" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - var(--nav-h) - 40px)', minHeight: 600 }}>
       {/* Header */}
       <div className="page-header" style={{ flexShrink: 0 }}>
         <div>
@@ -185,7 +185,7 @@ export default function AiChatPage() {
         ))}
       </div>
 
-      {/* Message thread */}
+      {/* Message thread — enlarged */}
       <div
         className="panel"
         style={{
@@ -193,10 +193,11 @@ export default function AiChatPage() {
           overflowY: 'auto',
           display: 'flex',
           flexDirection: 'column',
-          gap: 16,
-          padding: 20,
+          gap: 20,
+          padding: '24px 28px',
           marginBottom: 16,
           minHeight: 0,
+          fontSize: 15,
         }}
       >
         {messages.map((msg) => (
@@ -206,19 +207,19 @@ export default function AiChatPage() {
               display: 'flex',
               flexDirection: 'column',
               alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
-              gap: 4,
+              gap: 6,
             }}
           >
             <div
               style={{
-                maxWidth: '78%',
-                padding: '10px 14px',
+                maxWidth: '85%',
+                padding: '12px 18px',
                 borderRadius: msg.role === 'user' ? 'var(--r-lg) var(--r-lg) var(--r-xs) var(--r-lg)' : 'var(--r-lg) var(--r-lg) var(--r-lg) var(--r-xs)',
                 background: msg.role === 'user' ? 'rgba(0,212,255,0.12)' : 'var(--bg-elevated)',
                 border: msg.role === 'user' ? '1px solid rgba(0,212,255,0.25)' : '1px solid var(--border)',
                 fontFamily: 'var(--font-ui)',
-                fontSize: 14,
-                lineHeight: 1.6,
+                fontSize: 15,
+                lineHeight: 1.7,
                 color: 'var(--text-primary)',
                 wordBreak: 'break-word',
                 whiteSpace: 'pre-wrap',
@@ -265,7 +266,7 @@ export default function AiChatPage() {
           display: 'flex',
           gap: 12,
           alignItems: 'flex-end',
-          padding: '12px 16px',
+          padding: '14px 18px',
           flexShrink: 0,
         }}
       >
@@ -276,7 +277,7 @@ export default function AiChatPage() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Ask about energy loss, anomalies, forecasts… (Enter to send, Shift+Enter for newline)"
-          rows={2}
+          rows={3}
           disabled={isStreaming}
           style={{
             flex: 1,
@@ -290,7 +291,7 @@ export default function AiChatPage() {
           className="btn btn-primary"
           onClick={() => sendMessage(input)}
           disabled={isStreaming || !input.trim()}
-          style={{ height: 46, minWidth: 80 }}
+          style={{ height: 56, minWidth: 80 }}
         >
           {isStreaming ? 'Sending…' : 'Send'}
         </button>

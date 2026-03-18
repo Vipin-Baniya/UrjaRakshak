@@ -68,11 +68,31 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
 
-  register: (email: string, password: string, role = 'analyst') =>
+  register: (
+    email: string,
+    password: string,
+    role = 'viewer',
+    opts?: { full_name?: string; date_of_birth?: string; security_question?: string; security_answer?: string },
+  ) =>
     fetcher<any>('/api/v1/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ email, password, role }),
+      body: JSON.stringify({ email, password, role, ...opts }),
     }),
+
+  forgotPasswordVerify: (email: string, date_of_birth?: string, security_answer?: string) =>
+    fetcher<{ reset_token: string; message: string }>('/api/v1/auth/forgot-password/verify', {
+      method: 'POST',
+      body: JSON.stringify({ email, date_of_birth, security_answer }),
+    }),
+
+  forgotPasswordReset: (email: string, new_password: string, date_of_birth?: string, security_answer?: string) =>
+    fetcher<{ message: string }>('/api/v1/auth/forgot-password/reset', {
+      method: 'POST',
+      body: JSON.stringify({ email, new_password, date_of_birth, security_answer }),
+    }),
+
+  getMe: () =>
+    fetcher<any>('/api/v1/auth/me', { headers: { ...authHeaders() } }),
 
   // ── Analysis ─────────────────────────────────────────────────────────
   validate: (payload: AnalysisPayload) =>

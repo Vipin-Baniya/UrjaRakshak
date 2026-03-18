@@ -45,6 +45,11 @@ class User(Base):
     last_login = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Password recovery fields
+    date_of_birth = Column(String(20), nullable=True)        # stored as YYYY-MM-DD string
+    security_question = Column(String(255), nullable=True)   # e.g. "Mother's maiden name"
+    security_answer_hash = Column(String(255), nullable=True)  # bcrypt hash of lowercased answer
+
     # Relationships
     analyses = relationship("Analysis", back_populates="created_by_user", lazy="selectin")
 

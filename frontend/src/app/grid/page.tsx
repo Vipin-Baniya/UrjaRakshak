@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import type { GridNode, GridEdge } from '@/components/grid/AnimatedGridMap'
 import { MetricCard } from '@/components/ui/MetricCard'
+
+const BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
 const AnimatedGridMap = dynamic(
   () => import('@/components/grid/AnimatedGridMap').then((m) => m.AnimatedGridMap),
@@ -15,45 +17,75 @@ const GridTopologyFlow = dynamic(
   { ssr: false, loading: () => <div style={{ height: 500, background: 'var(--bg-panel)', borderRadius: 'var(--r-lg)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>Loading ReactFlow topology…</div> }
 )
 
-// ── Mock data: realistic Indian electricity grid ──────────────────────────
+// ── Fallback mock data used only when no data has been uploaded ────────────
 
-const MOCK_NODES: GridNode[] = [
-  // North Region
-  { id: 'NR-DEL', label: 'Delhi',      health: 'healthy',  load: 512.4 },
-  { id: 'NR-CHD', label: 'Chandigarh', health: 'warning',  load: 198.7 },
-  { id: 'NR-LKO', label: 'Lucknow',    health: 'healthy',  load: 345.2 },
-  { id: 'NR-JAI', label: 'Jaipur',     health: 'healthy',  load: 278.9 },
-  // West Region
-  { id: 'WR-MUM', label: 'Mumbai',     health: 'critical', load: 724.3 },
-  { id: 'WR-PUN', label: 'Pune',       health: 'warning',  load: 389.1 },
-  { id: 'WR-AHM', label: 'Ahmedabad',  health: 'healthy',  load: 302.5 },
-  { id: 'WR-NGP', label: 'Nagpur',     health: 'healthy',  load: 215.8 },
-  // South Region
-  { id: 'SR-BLR', label: 'Bengaluru',  health: 'healthy',  load: 567.2 },
-  { id: 'SR-CHN', label: 'Chennai',    health: 'healthy',  load: 493.6 },
-  { id: 'SR-HYD', label: 'Hyderabad',  health: 'warning',  load: 441.9 },
-  // East Region
-  { id: 'ER-KOL', label: 'Kolkata',    health: 'healthy',  load: 398.4 },
-  { id: 'ER-BHU', label: 'Bhubaneswar',health: 'healthy',  load: 187.3 },
-  { id: 'ER-PAT', label: 'Patna',      health: 'warning',  load: 224.6 },
+const FALLBACK_NODES: GridNode[] = [
+  { id: 'NR-DEL', label: 'Delhi',       health: 'healthy',  load: 512.4 },
+  { id: 'NR-CHD', label: 'Chandigarh',  health: 'warning',  load: 198.7 },
+  { id: 'NR-LKO', label: 'Lucknow',     health: 'healthy',  load: 345.2 },
+  { id: 'NR-JAI', label: 'Jaipur',      health: 'healthy',  load: 278.9 },
+  { id: 'WR-MUM', label: 'Mumbai',      health: 'critical', load: 724.3 },
+  { id: 'WR-PUN', label: 'Pune',        health: 'warning',  load: 389.1 },
+  { id: 'WR-AHM', label: 'Ahmedabad',   health: 'healthy',  load: 302.5 },
+  { id: 'WR-NGP', label: 'Nagpur',      health: 'healthy',  load: 215.8 },
+  { id: 'SR-BLR', label: 'Bengaluru',   health: 'healthy',  load: 567.2 },
+  { id: 'SR-CHN', label: 'Chennai',     health: 'healthy',  load: 493.6 },
+  { id: 'SR-HYD', label: 'Hyderabad',   health: 'warning',  load: 441.9 },
+  { id: 'ER-KOL', label: 'Kolkata',     health: 'healthy',  load: 398.4 },
+  { id: 'ER-BHU', label: 'Bhubaneswar', health: 'healthy',  load: 187.3 },
+  { id: 'ER-PAT', label: 'Patna',       health: 'warning',  load: 224.6 },
 ]
 
-const MOCK_EDGES: GridEdge[] = [
+const FALLBACK_EDGES: GridEdge[] = [
   { source: 'NR-DEL', target: 'NR-CHD', flow: 180 },
   { source: 'NR-DEL', target: 'NR-LKO', flow: 260 },
   { source: 'NR-DEL', target: 'NR-JAI', flow: 200 },
-  { source: 'NR-DEL', target: 'WR-AHM', flow: 150 },  // inter-regional
+  { source: 'NR-DEL', target: 'WR-AHM', flow: 150 },
   { source: 'WR-MUM', target: 'WR-PUN', flow: 310 },
   { source: 'WR-MUM', target: 'WR-AHM', flow: 250 },
   { source: 'WR-AHM', target: 'WR-NGP', flow: 170 },
-  { source: 'WR-NGP', target: 'SR-HYD', flow: 140 },  // inter-regional
+  { source: 'WR-NGP', target: 'SR-HYD', flow: 140 },
   { source: 'SR-BLR', target: 'SR-CHN', flow: 290 },
   { source: 'SR-BLR', target: 'SR-HYD', flow: 320 },
-  { source: 'SR-CHN', target: 'ER-BHU', flow: 130 },  // inter-regional
+  { source: 'SR-CHN', target: 'ER-BHU', flow: 130 },
   { source: 'ER-KOL', target: 'ER-BHU', flow: 210 },
   { source: 'ER-KOL', target: 'ER-PAT', flow: 180 },
-  { source: 'ER-PAT', target: 'NR-LKO', flow: 160 },  // inter-regional
+  { source: 'ER-PAT', target: 'NR-LKO', flow: 160 },
 ]
+
+// ── Build GridNode from GHI dashboard data ─────────────────────────────────
+
+interface GhiSubstation {
+  substation_id: string
+  ghi_score: number
+  balance_status?: string
+  residual_pct?: number
+  total_energy_mwh?: number
+}
+
+function ghiToNode(s: GhiSubstation): GridNode {
+  const ghi = s.ghi_score ?? 50
+  let health: GridNode['health'] = 'healthy'
+  const bs = (s.balance_status || '').toLowerCase()
+  if (bs === 'critical_imbalance' || ghi < 30) health = 'critical'
+  else if (bs === 'significant_imbalance' || ghi < 60) health = 'warning'
+  return {
+    id: s.substation_id,
+    label: s.substation_id,
+    health,
+    load: parseFloat(((s.total_energy_mwh ?? 0) * 1000 / 8760).toFixed(1)), // avg kW → MW
+  }
+}
+
+/** Connect uploaded substations in a simple ring topology for visualisation */
+function buildEdgesFromNodes(nodes: GridNode[]): GridEdge[] {
+  if (nodes.length < 2) return []
+  return nodes.map((n, i) => ({
+    source: n.id,
+    target: nodes[(i + 1) % nodes.length].id,
+    flow: Math.round(n.load * 0.6),
+  }))
+}
 
 interface RegionSummary {
   name: string
@@ -64,11 +96,22 @@ interface RegionSummary {
 }
 
 function buildRegions(nodes: GridNode[]): RegionSummary[] {
+  // For uploaded data (no NR-/WR- prefix) group all under "Uploaded"
+  const hasPrefix = nodes.some((n) => /^[A-Z]{2}-/.test(n.id))
+  if (!hasPrefix) {
+    return [{
+      name: 'Uploaded Substations',
+      color: '#00D4FF',
+      nodes: nodes.map((n) => n.label),
+      totalLoad: nodes.reduce((s, n) => s + n.load, 0),
+      alerts: nodes.filter((n) => n.health !== 'healthy').length,
+    }]
+  }
   const regions: { name: string; color: string; prefix: string }[] = [
-    { name: 'North',  color: '#00D4FF', prefix: 'NR-' },
-    { name: 'West',   color: '#8B5CF6', prefix: 'WR-' },
-    { name: 'South',  color: '#00E096', prefix: 'SR-' },
-    { name: 'East',   color: '#FFB020', prefix: 'ER-' },
+    { name: 'North', color: '#00D4FF', prefix: 'NR-' },
+    { name: 'West',  color: '#8B5CF6', prefix: 'WR-' },
+    { name: 'South', color: '#00E096', prefix: 'SR-' },
+    { name: 'East',  color: '#FFB020', prefix: 'ER-' },
   ]
   return regions.map((r) => {
     const regionNodes = nodes.filter((n) => n.id.startsWith(r.prefix))
@@ -79,31 +122,64 @@ function buildRegions(nodes: GridNode[]): RegionSummary[] {
       totalLoad: regionNodes.reduce((s, n) => s + n.load, 0),
       alerts: regionNodes.filter((n) => n.health !== 'healthy').length,
     }
-  })
+  }).filter((r) => r.nodes.length > 0)
 }
 
 export default function GridPage() {
+  const [allNodes, setAllNodes] = useState<GridNode[]>([])
+  const [allEdges, setAllEdges] = useState<GridEdge[]>([])
+  const [dataSource, setDataSource] = useState<'live' | 'fallback'>('fallback')
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'force' | 'flow'>('flow')
 
+  // Fetch real substation data from GHI dashboard
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('urjarakshak_token') : null
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+        const res = await fetch(`${BASE}/api/v1/ai/ghi/dashboard`, { headers })
+        if (res.ok) {
+          const data = await res.json()
+          const substations: GhiSubstation[] = data.substations || []
+          if (substations.length > 0) {
+            const nodes = substations.map(ghiToNode)
+            const edges = buildEdgesFromNodes(nodes)
+            setAllNodes(nodes)
+            setAllEdges(edges)
+            setDataSource('live')
+            return
+          }
+        }
+      } catch (_) { /* fall through */ }
+      setAllNodes(FALLBACK_NODES)
+      setAllEdges(FALLBACK_EDGES)
+      setDataSource('fallback')
+    }
+    fetchData()
+  }, [])
+
   const displayNodes = useMemo(() => {
-    if (!selectedRegion) return MOCK_NODES
+    if (!selectedRegion) return allNodes
+    // For region-filtered fallback data
     const prefix = { North: 'NR-', West: 'WR-', South: 'SR-', East: 'ER-' }[selectedRegion]
-    if (!prefix) return MOCK_NODES
-    const ids = new Set(MOCK_NODES.filter((n) => n.id.startsWith(prefix)).map((n) => n.id))
-    return MOCK_NODES.filter((n) => ids.has(n.id))
-  }, [selectedRegion])
+    if (prefix) {
+      const ids = new Set(allNodes.filter((n) => n.id.startsWith(prefix)).map((n) => n.id))
+      return allNodes.filter((n) => ids.has(n.id))
+    }
+    return allNodes.filter((n) => n.id.startsWith(selectedRegion))
+  }, [selectedRegion, allNodes])
 
   const displayEdges = useMemo(() => {
     const ids = new Set(displayNodes.map((n) => n.id))
-    return MOCK_EDGES.filter((e) => ids.has(e.source) && ids.has(e.target))
-  }, [displayNodes])
+    return allEdges.filter((e) => ids.has(e.source) && ids.has(e.target))
+  }, [displayNodes, allEdges])
 
-  const regions = useMemo(() => buildRegions(MOCK_NODES), [])
+  const regions = useMemo(() => buildRegions(allNodes), [allNodes])
 
-  const totalLoad = MOCK_NODES.reduce((s, n) => s + n.load, 0)
-  const activeAlerts = MOCK_NODES.filter((n) => n.health !== 'healthy').length
-  const criticalCount = MOCK_NODES.filter((n) => n.health === 'critical').length
+  const totalLoad    = allNodes.reduce((s, n) => s + n.load, 0)
+  const activeAlerts = allNodes.filter((n) => n.health !== 'healthy').length
+  const criticalCount = allNodes.filter((n) => n.health === 'critical').length
 
   return (
     <main className="page grid-bg">
@@ -112,9 +188,15 @@ export default function GridPage() {
           <div className="page-eyebrow">⚡ Grid Visualization</div>
           <h1 className="page-title">Grid Topology</h1>
           <p className="page-desc">
-            Real-time visualisation of substation nodes, transmission lines, and power
-            flow across India's regional grids. Hover nodes for details.
+            {dataSource === 'live'
+              ? `Showing ${allNodes.length} substations from uploaded data. Health and load derived from GHI analysis.`
+              : 'Real-time visualisation of substation nodes, transmission lines, and power flow. Upload meter data to see your real grid.'}
           </p>
+          {dataSource === 'fallback' && (
+            <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 'var(--r-md)', background: 'rgba(255,186,48,0.07)', border: '1px solid rgba(255,186,48,0.2)', fontSize: 12, color: 'var(--amber)', display: 'inline-block' }}>
+              ⚠ Demo data — <a href="/upload" style={{ color: 'var(--cyan)' }}>upload meter readings</a> to visualise your real grid
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 12 }}>
           {/* View mode toggle */}
@@ -159,10 +241,10 @@ export default function GridPage() {
 
       {/* Summary metrics */}
       <div className="grid-4" style={{ marginBottom: 24 }}>
-        <MetricCard label="Total Substations"  value={MOCK_NODES.length}  unit=""     color="var(--cyan)"  />
-        <MetricCard label="Total Load"         value={totalLoad}          unit=" MW"  color="var(--blue)"  />
-        <MetricCard label="Active Alerts"      value={activeAlerts}       unit=""     color="var(--amber)" />
-        <MetricCard label="Critical Nodes"     value={criticalCount}      unit=""     color="var(--red)"   />
+        <MetricCard label="Total Substations"  value={allNodes.length}  unit=""     color="var(--cyan)"  />
+        <MetricCard label="Total Load"         value={totalLoad}        unit=" MW"  color="var(--blue)"  />
+        <MetricCard label="Active Alerts"      value={activeAlerts}     unit=""     color="var(--amber)" />
+        <MetricCard label="Critical Nodes"     value={criticalCount}    unit=""     color="var(--red)"   />
       </div>
 
       {/* ReactFlow topology */}
