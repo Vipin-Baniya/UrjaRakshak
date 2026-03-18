@@ -21,16 +21,16 @@ const QUICK_PROMPTS = [
 ]
 
 async function* streamAIResponse(substationId: string, message: string): AsyncGenerator<string> {
-  // Try streaming endpoint; fall back to standard JSON response
+  // Use the new /chat endpoint for conversational AI responses
   const token = typeof window !== 'undefined' ? localStorage.getItem('urjarakshak_token') : null
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (token) headers['Authorization'] = `Bearer ${token}`
 
   try {
-    const res = await fetch(`${BASE}/api/v1/ai/interpret/${encodeURIComponent(substationId)}`, {
+    const res = await fetch(`${BASE}/api/v1/ai/chat`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ question: message }),
+      body: JSON.stringify({ substation_id: substationId, question: message }),
     })
 
     if (!res.ok) {
@@ -38,46 +38,14 @@ async function* streamAIResponse(substationId: string, message: string): AsyncGe
       throw new Error(body?.detail || `HTTP ${res.status}`)
     }
 
-    const contentType = res.headers.get('content-type') || ''
-    if (contentType.includes('text/event-stream')) {
-      // SSE streaming
-      const reader = res.body!.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim()
-            if (data === '[DONE]') return
-            try {
-              const parsed = JSON.parse(data)
-              const chunk = parsed?.delta || parsed?.content || parsed?.text || ''
-              if (chunk) yield chunk
-            } catch {
-              yield data
-            }
-          }
-        }
-      }
-    } else {
-      const json = await res.json()
-      const text: string =
-        json?.interpretation ||
-        json?.summary ||
-        json?.answer ||
-        json?.result ||
-        (typeof json === 'string' ? json : JSON.stringify(json, null, 2))
-      // Simulate typewriter effect for non-streaming response
-      const words = text.split(' ')
-      for (const word of words) {
-        yield word + ' '
-        await new Promise((r) => setTimeout(r, 18))
-      }
+    const json = await res.json()
+    const text: string = json?.answer || json?.interpretation || json?.result || JSON.stringify(json, null, 2)
+
+    // Simulate typewriter effect
+    const words = text.split(' ')
+    for (const word of words) {
+      yield word + ' '
+      await new Promise((r) => setTimeout(r, 18))
     }
   } catch (err: any) {
     throw new Error(err?.message || 'Failed to reach AI service')
