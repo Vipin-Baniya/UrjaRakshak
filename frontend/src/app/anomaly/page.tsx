@@ -20,6 +20,8 @@ interface DetectionResponse {
   metadata: { model: Record<string, string | number | boolean> }
 }
 
+const DEFAULT_CONFIDENCE_SCORE = 0.9
+
 interface FormState {
   substation_id: string
   input_mwh: string
@@ -123,7 +125,7 @@ export default function AnomalyPage() {
           output_mwh: outputMwh,
           residual_mwh: residualMwh,
           residual_percent: inputMwh > 0 ? (residualMwh / inputMwh) * 100 : 0,
-          confidence_score: 0.9,
+          confidence_score: DEFAULT_CONFIDENCE_SCORE,
           time_of_day_hour: parseFloat(form.time_of_day_hour),
           day_of_week: parseFloat(form.day_of_week),
         }),

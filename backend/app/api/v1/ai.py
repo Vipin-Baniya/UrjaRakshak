@@ -520,9 +520,16 @@ async def ai_chat(
     )).scalar_one_or_none()
 
     if analysis:
+        from datetime import datetime as _dt
+        ts_str = (
+            analysis.created_at.strftime('%Y-%m-%d %H:%M')
+            if isinstance(analysis.created_at, _dt)
+            else str(analysis.created_at) if analysis.created_at
+            else 'N/A'
+        )
         context = (
             f"Substation: {request.substation_id}\n"
-            f"Latest analysis ({analysis.created_at.strftime('%Y-%m-%d %H:%M') if analysis.created_at else 'N/A'}):\n"
+            f"Latest analysis ({ts_str}):\n"
             f"  Input energy:     {analysis.input_energy_mwh or 0:.2f} MWh\n"
             f"  Output energy:    {analysis.output_energy_mwh or 0:.2f} MWh\n"
             f"  Residual loss:    {analysis.residual_percentage or 0:.2f}%\n"

@@ -89,10 +89,10 @@ export default function Home() {
     return () => obs.disconnect()
   }, [])
 
-  const acc1 = useCounter(99, 1600, statsVisible)
-  const acc2 = useCounter(3, 1400, statsVisible)
-  const acc3 = useCounter(100, 1800, statsVisible)
-  const acc4 = useCounter(24, 1200, statsVisible)
+  const detectionAccuracy = useCounter(99, 1600, statsVisible)
+  const gateEnsemble = useCounter(3, 1400, statsVisible)
+  const auditCompliance = useCounter(100, 1800, statsVisible)
+  const liveMonitoring = useCounter(24, 1200, statsVisible)
 
   const principles = [
     {
@@ -233,10 +233,10 @@ export default function Home() {
       <section ref={statsRef} style={{ paddingBottom: 80, borderTop: '1px solid var(--border-subtle)', paddingTop: 56 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 24 }}>
           {[
-            { value: acc1, suffix: '%', label: 'Detection Accuracy', color: 'var(--cyan)' },
-            { value: acc2, suffix: '', label: 'Gate Ensemble', color: 'var(--green)' },
-            { value: acc3, suffix: '', label: 'Audit Compliance', color: 'var(--violet)' },
-            { value: acc4, suffix: '/7', label: 'Live Monitoring', color: 'var(--amber)' },
+            { value: detectionAccuracy, suffix: '%', label: 'Detection Accuracy', color: 'var(--cyan)' },
+            { value: gateEnsemble,      suffix: '',  label: 'Gate Ensemble',      color: 'var(--green)' },
+            { value: auditCompliance,   suffix: '',  label: 'Audit Compliance',   color: 'var(--violet)' },
+            { value: liveMonitoring,    suffix: '/7', label: 'Live Monitoring',   color: 'var(--amber)' },
           ].map((s, i) => (
             <div key={i} className="panel" style={{ textAlign: 'center', padding: '24px 16px' }}>
               <div style={{
