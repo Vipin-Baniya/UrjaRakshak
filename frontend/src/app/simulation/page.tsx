@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
+const BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '')
+
 // ── Zone model ──────────────────────────────────────────────────────────────
 
 interface Zone {
@@ -18,7 +20,9 @@ interface Zone {
   col: number
 }
 
-const INITIAL_ZONES: Zone[] = [
+// ── Fallback zones when no data is uploaded ──────────────────────────────────
+
+const FALLBACK_ZONES: Zone[] = [
   { id: 'Z01', name: 'Substation Alpha', sector: 'Central',  type: 'substation',  status: 'normal',  consumption: 2840, expected: 2900, theftProb:  4, row: 0, col: 1 },
   { id: 'Z02', name: 'Sector 12 — Res',  sector: 'North',    type: 'residential', status: 'theft',   consumption:  148, expected:  312, theftProb: 94, row: 0, col: 2 },
   { id: 'Z03', name: 'Market Complex',   sector: 'East',     type: 'commercial',  status: 'normal',  consumption: 1102, expected: 1140, theftProb:  8, row: 0, col: 3 },
@@ -32,6 +36,48 @@ const INITIAL_ZONES: Zone[] = [
   { id: 'Z11', name: 'Housing Estate',   sector: 'West',     type: 'residential', status: 'normal',  consumption:  480, expected:  490, theftProb:  3, row: 2, col: 3 },
   { id: 'Z12', name: 'Grid Control',     sector: 'Central',  type: 'substation',  status: 'normal',  consumption: 1800, expected: 1850, theftProb:  2, row: 3, col: 1 },
 ]
+
+// ── Build zones from GHI dashboard API data ───────────────────────────────────
+
+interface GhiSubstation {
+  substation_id: string
+  ghi_score: number
+  balance_status?: string
+  residual_pct?: number
+  total_energy_mwh?: number
+  last_updated?: string
+}
+
+function ghiToZone(s: GhiSubstation, idx: number): Zone {
+  const row = Math.floor(idx / 4)
+  const col = idx % 4
+  const ghi = s.ghi_score ?? 50
+  const residual = s.residual_pct ?? 0
+  // Derive theft probability from residual loss and GHI
+  const theftProb = Math.round(Math.min(99, Math.max(0, residual * 4 + (100 - ghi) * 0.5)))
+  const totalMwh = (s.total_energy_mwh ?? 1) * 1000   // convert to kWh
+  const consumption = Math.round(totalMwh * (1 - residual / 100))
+  const expected = Math.round(totalMwh)
+
+  let status: Zone['status'] = 'normal'
+  const bs = (s.balance_status || '').toLowerCase()
+  if (bs === 'critical_imbalance') status = 'theft'
+  else if (bs === 'significant_imbalance') status = 'warning'
+  else if (ghi < 40) status = 'warning'
+
+  return {
+    id: s.substation_id,
+    name: s.substation_id,
+    sector: s.substation_id.split('-')[0] || 'Grid',
+    type: 'substation',
+    status,
+    consumption,
+    expected,
+    theftProb,
+    row,
+    col,
+  }
+}
 
 // ── Type icons / colors ─────────────────────────────────────────────────────
 
@@ -183,7 +229,10 @@ const AUTO_EVENT_CHANCE = 0.25   // probability an auto tick triggers a warning
 // ── Main page ────────────────────────────────────────────────────────────────
 
 export default function SimulationPage() {
-  const [zones, setZones] = useState<Zone[]>(INITIAL_ZONES)
+  const [zones, setZones] = useState<Zone[]>([])
+  const [baseZones, setBaseZones] = useState<Zone[]>([])   // for reset
+  const [loading, setLoading] = useState(true)
+  const [dataSource, setDataSource] = useState<'live' | 'fallback'>('fallback')
   const [eventLog, setEventLog] = useState<EventLog[]>([])
   const [selectedZone, setSelectedZone] = useState<Zone | null>(null)
   const [autoRun, setAutoRun] = useState(true)
@@ -192,6 +241,35 @@ export default function SimulationPage() {
   const zonesRef = useRef(zones)
   zonesRef.current = zones
 
+  // Fetch real data from backend
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('urjarakshak_token') : null
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+        const res = await fetch(`${BASE}/api/v1/ai/ghi/dashboard`, { headers })
+        if (res.ok) {
+          const data = await res.json()
+          const substations: GhiSubstation[] = data.substations || []
+          if (substations.length > 0) {
+            const liveZones = substations.map((s, i) => ghiToZone(s, i))
+            setZones(liveZones)
+            setBaseZones(liveZones)
+            setDataSource('live')
+            setLoading(false)
+            return
+          }
+        }
+      } catch (_) { /* fall through */ }
+      // Fallback to demo data
+      setZones(FALLBACK_ZONES)
+      setBaseZones(FALLBACK_ZONES)
+      setDataSource('fallback')
+      setLoading(false)
+    }
+    fetchData()
+  }, [])
+
   function addEvent(zoneId: string, zoneName: string, message: string, severity: EventLog['severity']) {
     const entry: EventLog = { id: _eventId++, ts: nowStr(), zoneId, zoneName, message, severity }
     setEventLog(prev => [entry, ...prev].slice(0, 15))
@@ -199,7 +277,7 @@ export default function SimulationPage() {
 
   function injectTheft(targetId?: string) {
     const currentZones = zonesRef.current
-    const candidates = currentZones.filter(z => z.status === 'normal' && z.type !== 'substation')
+    const candidates = currentZones.filter(z => z.status === 'normal')
     const target = targetId
       ? currentZones.find(z => z.id === targetId)
       : candidates[Math.floor(Math.random() * candidates.length)]
@@ -230,7 +308,7 @@ export default function SimulationPage() {
   }
 
   function resetAll() {
-    setZones(INITIAL_ZONES)
+    setZones(baseZones)
     setEventLog([])
     setSelectedZone(null)
   }
@@ -241,7 +319,7 @@ export default function SimulationPage() {
       if (!autoRef.current) return
       const r = Math.random()
       if (r < AUTO_EVENT_CHANCE) {
-        const normalZones = zonesRef.current.filter(z => z.status === 'normal' && z.type !== 'substation')
+        const normalZones = zonesRef.current.filter(z => z.status === 'normal')
         const pick = normalZones[Math.floor(Math.random() * normalZones.length)]
         if (pick) {
           setZones(prev => prev.map(z =>
@@ -253,6 +331,22 @@ export default function SimulationPage() {
     }, 8000)
     return () => clearInterval(id)
   }, [])
+
+  const theftZones         = zones.filter(z => z.status === 'theft')
+  const warningZones       = zones.filter(z => z.status === 'warning')
+  const investigatingZones = zones.filter(z => z.status === 'investigating')
+  const totalLoss          = theftZones.reduce((s, z) => s + (z.expected - z.consumption), 0)
+
+  if (loading) {
+    return (
+      <div className="page grid-bg" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400 }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>⚡</div>
+          <p style={{ color: 'var(--text-secondary)' }}>Loading simulation data…</p>
+        </div>
+      </div>
+    )
+  }
 
   const theftZones        = zones.filter(z => z.status === 'theft')
   const warningZones      = zones.filter(z => z.status === 'warning')
@@ -268,9 +362,16 @@ export default function SimulationPage() {
         <div className="page-eyebrow">⚡ Live Simulation</div>
         <h1 className="page-title glow-text">Grid Theft Detection Simulation</h1>
         <p className="page-desc">
-          Interactive city grid — inject theft events, investigate zones, and resolve incidents in real-time.
-          Theft zones pulse red; investigating zones glow cyan.
+          Interactive grid — inject theft events, investigate zones, and resolve incidents in real-time.
+          {dataSource === 'live'
+            ? ` Showing ${zones.length} substations from uploaded data.`
+            : ' Showing demo data — upload meter readings to see your real grid.'}
         </p>
+        {dataSource === 'fallback' && (
+          <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 'var(--r-md)', background: 'rgba(255,186,48,0.07)', border: '1px solid rgba(255,186,48,0.2)', fontSize: 12, color: 'var(--amber)', display: 'inline-block' }}>
+            ⚠ Demo mode — <a href="/upload" style={{ color: 'var(--cyan)' }}>upload meter data</a> to simulate your real grid
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap', alignItems: 'center' }}>
           <button className="btn btn-danger" onClick={() => injectTheft()}>
             ⚡ Inject Theft Event

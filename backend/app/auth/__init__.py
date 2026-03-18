@@ -67,11 +67,29 @@ class UserCreate(BaseModel):
     )
     full_name: Optional[str] = None
     role: str = Field(default="viewer", pattern="^(admin|analyst|viewer)$")
+    date_of_birth: Optional[str] = None          # YYYY-MM-DD
+    security_question: Optional[str] = None
+    security_answer: Optional[str] = None
 
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+
+class PasswordResetVerify(BaseModel):
+    """Step 1 — verify identity before resetting password."""
+    email: EmailStr
+    date_of_birth: Optional[str] = None          # YYYY-MM-DD
+    security_answer: Optional[str] = None
+
+
+class PasswordReset(BaseModel):
+    """Step 2 — set a new password after identity is verified."""
+    email: EmailStr
+    date_of_birth: Optional[str] = None
+    security_answer: Optional[str] = None
+    new_password: str = Field(..., min_length=8, max_length=72)
 
 
 class UserPublic(BaseModel):
@@ -81,6 +99,7 @@ class UserPublic(BaseModel):
     role: str
     is_active: bool
     created_at: datetime
+    has_recovery: bool = False                   # True when DOB/security answer is set
 
     class Config:
         from_attributes = True
@@ -162,7 +181,12 @@ async def authenticate_user(email: str, password: str, db: AsyncSession) -> Opti
 
 
 async def create_user(user_data: UserCreate, db: AsyncSession) -> User:
-    """Create a new user"""
+    """Create a new user.
+
+    First user ever registered is automatically promoted to admin.
+    Subsequent users receive the role supplied in user_data (default 'viewer').
+    """
+    from sqlalchemy import func as sql_func
     # Check email not already taken
     existing = await get_user_by_email(user_data.email, db)
     if existing:
@@ -171,11 +195,26 @@ async def create_user(user_data: UserCreate, db: AsyncSession) -> User:
             detail="Email already registered",
         )
 
+    # Auto-promote to admin if this is the very first user
+    count_result = await db.execute(select(sql_func.count()).select_from(User))
+    user_count = count_result.scalar() or 0
+    effective_role = "admin" if user_count == 0 else user_data.role
+
+    # Prepare optional recovery fields
+    dob = user_data.date_of_birth.strip() if user_data.date_of_birth else None
+    sec_q = user_data.security_question.strip() if user_data.security_question else None
+    sec_a_hash: Optional[str] = None
+    if user_data.security_answer:
+        sec_a_hash = hash_password(user_data.security_answer.strip().lower())
+
     user = User(
         email=user_data.email,
         hashed_password=hash_password(user_data.password),
         full_name=user_data.full_name,
-        role=user_data.role,
+        role=effective_role,
+        date_of_birth=dob,
+        security_question=sec_q,
+        security_answer_hash=sec_a_hash,
     )
     db.add(user)
     await db.commit()

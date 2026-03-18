@@ -472,17 +472,11 @@ class AIInterpretationEngine:
         """
         Conversational AI response. Returns {answer, model, error}.
         Uses CHAT_SYSTEM_PROMPT for free-form responses (not bounded JSON schema).
-        Falls back to a helpful offline message when no API key is configured.
+        Falls back to a physics-based offline answer when no API key is configured.
         """
         if not self.is_configured:
             return {
-                "answer": (
-                    "AI is currently in offline mode. To enable live AI responses, "
-                    "configure OPENAI_API_KEY or ANTHROPIC_API_KEY in the environment. "
-                    f"Your question was: \"{question}\". "
-                    "In offline mode I can confirm the physics engine, anomaly detection, "
-                    "and GHI scoring are all running normally."
-                ),
+                "answer": self._offline_chat_answer(question, context),
                 "model": "offline",
                 "error": None,
             }
@@ -506,6 +500,152 @@ class AIInterpretationEngine:
                 "model": self.preferred_provider,
                 "error": str(e)[:200],
             }
+
+    @staticmethod
+    def _offline_chat_answer(question: str, context: Optional[str]) -> str:
+        """
+        Physics-based offline answer that uses the context data to give a
+        meaningful response even without an external AI API key.
+        """
+        import re
+
+        q = question.lower()
+
+        # ── Parse context ──────────────────────────────────────────────────
+        substation_id = "unknown substation"
+        input_mwh: Optional[float] = None
+        output_mwh: Optional[float] = None
+        residual_pct: Optional[float] = None
+        balance_status: Optional[str] = None
+        confidence_pct: Optional[float] = None
+
+        if context:
+            for line in context.splitlines():
+                line = line.strip()
+                if line.startswith("Substation:"):
+                    substation_id = line.split(":", 1)[1].strip()
+                m = re.search(r"Input energy:\s*([\d.]+)", line)
+                if m:
+                    input_mwh = float(m.group(1))
+                m = re.search(r"Output energy:\s*([\d.]+)", line)
+                if m:
+                    output_mwh = float(m.group(1))
+                m = re.search(r"Residual loss:\s*([\d.]+)", line)
+                if m:
+                    residual_pct = float(m.group(1))
+                m = re.search(r"Balance status:\s*(\S+)", line)
+                if m:
+                    balance_status = m.group(1).lower()
+                m = re.search(r"Confidence:\s*([\d.]+)", line)
+                if m:
+                    confidence_pct = float(m.group(1))
+
+        has_data = input_mwh is not None
+
+        # ── No context / no data yet ───────────────────────────────────────
+        if not has_data:
+            if "no analysis" in (context or "").lower() or not context:
+                return (
+                    f"No analysis data is available for substation '{substation_id}' yet. "
+                    "Please upload meter readings and run the Physics Analysis first. "
+                    "Once data is available I can answer questions about energy loss, anomalies, and grid health."
+                )
+
+        # ── Build a concise data summary ───────────────────────────────────
+        loss_kwh = (input_mwh - output_mwh) * 1000 if (input_mwh and output_mwh) else None
+        status_label = {
+            "balanced": "balanced (within normal technical-loss range)",
+            "minor_imbalance": "showing a minor imbalance — worth monitoring",
+            "significant_imbalance": "showing a significant imbalance — investigation recommended",
+            "critical_imbalance": "in a critical imbalance state — urgent review required",
+            "uncertain": "uncertain — more data is needed for a reliable assessment",
+            "refused": "refused (insufficient data quality)",
+        }.get(balance_status or "", balance_status or "unknown")
+
+        # ── Answer by question intent ──────────────────────────────────────
+        if any(kw in q for kw in ("anomal", "anomaly", "anomalies", "detect", "flag", "suspicious")):
+            if residual_pct is not None and residual_pct > 10:
+                return (
+                    f"Substation {substation_id} shows a residual energy gap of {residual_pct:.1f}%, "
+                    f"which is above the normal technical-loss threshold (~5%). "
+                    f"The balance status is {status_label}. "
+                    "This level of residual may indicate metering inaccuracy, unrecorded outages, or non-technical losses. "
+                    "I recommend reviewing the individual meter readings for any Z-score outliers flagged during the last upload."
+                )
+            elif residual_pct is not None:
+                return (
+                    f"Substation {substation_id} has a residual gap of only {residual_pct:.1f}%, "
+                    f"which is within normal technical-loss bounds. "
+                    f"Balance status: {status_label}. No significant anomalies detected in the latest analysis."
+                )
+            return (
+                f"Substation {substation_id} has been analysed but no anomaly scores are available yet. "
+                "Upload more meter data and run anomaly detection to get detailed results."
+            )
+
+        if any(kw in q for kw in ("loss", "energy loss", "theft", "gap", "residual")):
+            if input_mwh is not None and output_mwh is not None:
+                eff = (output_mwh / input_mwh * 100) if input_mwh > 0 else 0
+                return (
+                    f"Substation {substation_id} — Energy balance summary:\n"
+                    f"  • Input:   {input_mwh:.2f} MWh\n"
+                    f"  • Output:  {output_mwh:.2f} MWh\n"
+                    f"  • Loss:    {loss_kwh:.1f} kWh ({residual_pct:.1f}%)\n"
+                    f"  • Efficiency: {eff:.1f}%\n"
+                    f"  • Status: {status_label}\n\n"
+                    "Typical technical losses (I²R + transformer) account for 2–5%. "
+                    f"A residual of {residual_pct:.1f}% "
+                    + ("is within normal range." if (residual_pct or 0) <= 5 else "exceeds normal range and warrants investigation.")
+                )
+            return f"No energy data found for substation '{substation_id}'. Upload meter readings first."
+
+        if any(kw in q for kw in ("health", "ghi", "grid health", "status", "summary", "overall", "report")):
+            if has_data:
+                conf_str = f"{confidence_pct:.0f}%" if confidence_pct is not None else "N/A"
+                return (
+                    f"Grid health summary for substation {substation_id}:\n"
+                    f"  • Balance: {status_label}\n"
+                    f"  • Input / Output: {input_mwh:.2f} MWh / {output_mwh:.2f} MWh\n"
+                    f"  • Residual loss: {residual_pct:.1f}%\n"
+                    f"  • Analysis confidence: {conf_str}\n\n"
+                    "For a full Grid Health Index (GHI) score please visit the Dashboard page."
+                )
+
+        if any(kw in q for kw in ("forecast", "predict", "next", "future", "load")):
+            return (
+                f"Load forecasting for substation {substation_id}: "
+                "The physics engine uses historical meter readings to build a per-meter model. "
+                "With sufficient data (≥ 10 readings per meter) the system predicts expected consumption "
+                "and flags readings that deviate beyond the forecast band. "
+                "Visit the Dashboard → GHI panel for trend charts and the Anomaly page for flagged deviations."
+            )
+
+        if any(kw in q for kw in ("efficien", "performance", "throughput")):
+            if input_mwh and output_mwh and input_mwh > 0:
+                eff = output_mwh / input_mwh * 100
+                return (
+                    f"Substation {substation_id} efficiency: {eff:.1f}% "
+                    f"(delivered {output_mwh:.2f} MWh of {input_mwh:.2f} MWh injected). "
+                    f"Balance status: {status_label}."
+                )
+
+        # ── Generic / fallback ─────────────────────────────────────────────
+        if has_data:
+            return (
+                f"Here is a quick summary for substation {substation_id}:\n"
+                f"  • Input energy: {input_mwh:.2f} MWh\n"
+                f"  • Output energy: {output_mwh:.2f} MWh\n"
+                f"  • Residual loss: {residual_pct:.1f}%\n"
+                f"  • Balance: {status_label}\n\n"
+                "You can ask about energy loss, anomalies, efficiency, or load forecasts. "
+                "For richer AI analysis, configure an OPENAI_API_KEY or ANTHROPIC_API_KEY."
+            )
+        return (
+            "I am running in offline mode (no AI provider configured). "
+            f"Your question was: \"{question}\". "
+            "Upload meter data and run physics analysis for substation-specific answers, "
+            "or configure an AI provider key for natural-language responses."
+        )
 
     def _chat_openai(self, user_msg: str) -> Dict[str, Any]:
         from openai import OpenAI
