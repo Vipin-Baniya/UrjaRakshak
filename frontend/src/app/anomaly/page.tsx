@@ -108,8 +108,12 @@ export default function AnomalyPage() {
     setResult(null)
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('urjarakshak_token') : null
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (token) headers['Authorization'] = `Bearer ${token}`
+    if (!token) {
+      setError('Authentication required. Please log in to use anomaly detection.')
+      setLoading(false)
+      return
+    }
+    const headers: Record<string, string> = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
 
     const inputMwh = parseFloat(form.input_mwh)
     const outputMwh = parseFloat(form.output_mwh)

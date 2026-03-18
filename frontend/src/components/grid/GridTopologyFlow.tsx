@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import ReactFlow, {
   Node, Edge, Background, Controls, MiniMap,
   BackgroundVariant, NodeTypes,
@@ -9,6 +9,8 @@ import ReactFlow, {
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { motion, AnimatePresence } from 'framer-motion'
+
+const BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
 /* ──────────────────────────── Custom Node ──────────────────────────── */
 
@@ -127,6 +129,67 @@ export function GridTopologyFlow() {
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES)
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES)
   const [selected, setSelected] = useState<SubstationData | null>(null)
+  const [dataSource, setDataSource] = useState<'live' | 'demo'>('demo')
+
+  // Fetch real GHI dashboard data and build nodes/edges from it
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('urjarakshak_token') : null
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+        const res = await fetch(`${BASE}/api/v1/ai/ghi/dashboard`, { headers })
+        if (!res.ok) return
+        const data = await res.json()
+        const substations: Array<{
+          substation_id: string
+          ghi_score: number
+          balance_status?: string
+          total_energy_mwh?: number
+        }> = data.substations || []
+        if (substations.length < 2) return
+
+        const n = substations.length
+        const radius = Math.min(220, 40 + n * 14)
+        const cx = 360
+        const cy = 260
+
+        const newNodes: Node<SubstationData>[] = substations.map((s, i) => {
+          const angle = (2 * Math.PI * i) / n - Math.PI / 2
+          const bs = (s.balance_status || '').toLowerCase()
+          const ghi = s.ghi_score ?? 50
+          let health: SubstationData['health'] = 'healthy'
+          if (bs === 'critical_imbalance' || ghi < 30) health = 'critical'
+          else if (bs === 'significant_imbalance' || ghi < 60) health = 'warning'
+          return {
+            id: s.substation_id,
+            type: 'substation',
+            position: {
+              x: cx + radius * Math.cos(angle),
+              y: cy + radius * Math.sin(angle),
+            },
+            data: {
+              label: s.substation_id,
+              load: parseFloat(((s.total_energy_mwh ?? 0) * 1000 / 8760).toFixed(1)),
+              health,
+              region: 'Uploaded',
+            },
+          }
+        })
+
+        const newEdges: Edge[] = newNodes.map((nd, i) => {
+          const next = newNodes[(i + 1) % newNodes.length]
+          const flow = Math.round(nd.data.load * 0.6)
+          return makeEdge(`eu${i}`, nd.id, next.id, flow, false)
+        })
+
+        setNodes(newNodes)
+        setEdges(newEdges)
+        setDataSource('live')
+      } catch (_) { /* keep fallback */ }
+    }
+    loadData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const onConnect = useCallback(
     (params: Connection) => setEdges(eds => addEdge(params, eds)),
@@ -137,19 +200,29 @@ export function GridTopologyFlow() {
     setSelected(prev => prev?.label === node.data.label ? null : node.data)
   }, [])
 
-  const totalLoad     = INITIAL_NODES.reduce((s, n) => s + n.data.load, 0)
-  const criticalCount = INITIAL_NODES.filter(n => n.data.health === 'critical').length
-  const warningCount  = INITIAL_NODES.filter(n => n.data.health === 'warning').length
+  const totalLoad     = nodes.reduce((s, n) => s + n.data.load, 0)
+  const criticalCount = nodes.filter(n => n.data.health === 'critical').length
+  const warningCount  = nodes.filter(n => n.data.health === 'warning').length
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {/* Stats row */}
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        <Stat label="Substations" value={INITIAL_NODES.length.toString()} color="var(--cyan)" />
+        <Stat label="Substations" value={nodes.length.toString()} color="var(--cyan)" />
         <Stat label="Total Load"  value={`${totalLoad.toFixed(0)} MW`}    color="var(--blue)" />
         <Stat label="Critical"    value={criticalCount.toString()}         color="var(--red)"  />
         <Stat label="Warnings"    value={warningCount.toString()}          color="var(--amber)" />
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center' }}>
+          {dataSource === 'demo' && (
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--amber)', border: '1px solid rgba(255,186,48,0.3)', borderRadius: 4, padding: '2px 6px' }}>
+              DEMO
+            </span>
+          )}
+          {dataSource === 'live' && (
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--green)', border: '1px solid rgba(0,224,150,0.3)', borderRadius: 4, padding: '2px 6px' }}>
+              LIVE DATA
+            </span>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <div style={{ width: 24, height: 2, background: 'rgba(0,212,255,0.5)' }} />
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-dim)' }}>Intra-region</span>
