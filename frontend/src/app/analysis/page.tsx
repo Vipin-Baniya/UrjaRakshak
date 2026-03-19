@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { api, ghiApi, AIStatus } from '@/lib/api'
+import { SessionBanner } from '@/components/ui/SessionBanner'
 
 const STATUS_COLORS: Record<string, string> = {
   balanced:               'var(--green)',
