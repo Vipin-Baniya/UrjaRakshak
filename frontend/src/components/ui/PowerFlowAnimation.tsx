@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useAppStore } from '@/store/useAppStore'
+import { api } from '@/lib/api'
 
 interface FlowNode {
   id: string
@@ -55,18 +57,100 @@ const NODE_COLORS: Record<FlowNode['type'], { bg: string; border: string; text: 
   consumer:     { bg: 'rgba(255,176,32,0.12)', border: '#FFB020', text: '#FFB020'  },
 }
 
-const NODE_ICONS: Record<FlowNode['type'], string> = {
-  generation:   '⚡',
-  transmission: '🔌',
-  distribution: '🏭',
-  consumer:     '🏙️',
-}
+const MAX_LABEL_LENGTH = 14
+const TRUNCATE_LENGTH = 13
+const MIN_STROKE_WIDTH = 1.5
+const MAX_STROKE_WIDTH = 4
+const POWER_SCALE_FACTOR = 200
 
 interface Particle {
   id: number
   edgeIdx: number
   progress: number
   speed: number
+}
+
+const NODE_ICONS: Record<FlowNode['type'], string> = {
+  generation:   '⚡',
+  transmission: '🔌',
+  distribution: '🏭',
+  consumer:     '🏙️',
+}
+function buildNodesFromDashboard(dashboard: any): { nodes: FlowNode[]; edges: FlowEdge[] } | null {
+  if (!dashboard?.has_data) return null
+
+  const la = dashboard.latest_analysis
+  const lb = dashboard.latest_batch
+
+  if (!la) return null
+
+  const inputMW = (la.input_energy_mwh ?? 0)
+  const outputMW = (la.output_energy_mwh ?? 0)
+  const residual = (la.residual_pct ?? 0)
+  const techLoss = (la.technical_loss_pct ?? 0)
+  const substationId = la.substation_id ?? lb?.substation_id ?? 'Main'
+
+  // Build a simple 3-tier flow from the one analysed substation
+  const nodes: FlowNode[] = [
+    { id: 'gen1',  label: 'Grid Supply',   type: 'generation',   value: Math.round(inputMW * 1000) / 1000,  unit: 'MWh', x: 60,  y: 160 },
+    { id: 'tr1',   label: substationId,    type: 'transmission', value: Math.round(inputMW * 1000) / 1000,  unit: 'MWh', x: 280, y: 160 },
+    { id: 'dist1', label: 'Distribution',  type: 'distribution', value: Math.round(outputMW * 1000) / 1000, unit: 'MWh', x: 500, y: 80  },
+    { id: 'dist2', label: 'Tech Losses',   type: 'distribution', value: Math.round((inputMW * techLoss / 100) * 1000) / 1000, unit: 'MWh', x: 500, y: 280 },
+    { id: 'cons1', label: 'Load Served',   type: 'consumer',     value: Math.round(outputMW * 1000) / 1000, unit: 'MWh', x: 700, y: 80  },
+    { id: 'cons2', label: `Residual ${residual.toFixed(1)}%`, type: 'consumer', value: Math.round((inputMW * residual / 100) * 1000) / 1000, unit: 'MWh', x: 700, y: 280 },
+  ]
+
+  const lossMW = inputMW * (residual / 100)
+  const edges: FlowEdge[] = [
+    { from: 'gen1',  to: 'tr1',   power: Math.round(inputMW), loss: Math.round(lossMW * 0.1) },
+    { from: 'tr1',   to: 'dist1', power: Math.round(outputMW), loss: Math.round(inputMW * techLoss / 100) },
+    { from: 'tr1',   to: 'dist2', power: Math.round(inputMW * techLoss / 100), loss: 0 },
+    { from: 'dist1', to: 'cons1', power: Math.round(outputMW), loss: Math.round(lossMW * 0.2) },
+    { from: 'dist2', to: 'cons2', power: Math.round(lossMW), loss: 0 },
+  ]
+
+  return { nodes, edges }
+}
+
+/** Build from the high-risk + latest batch context */
+function buildNodesFromSession(session: ReturnType<typeof useAppStore.getState>['activeSession']): { nodes: FlowNode[]; edges: FlowEdge[] } | null {
+  if (!session) return null
+
+  const totalKwh = session.stats.total_energy_kwh
+  const totalMwh = totalKwh / 1000
+  const residualPct = session.stats.residual_pct
+  const confidence = session.stats.confidence_score
+  const outputMwh = totalMwh * (1 - residualPct / 100)
+  const lossMwh = totalMwh * (residualPct / 100)
+  const substationId = session.substationId
+
+  const nodes: FlowNode[] = [
+    { id: 'gen1',  label: 'Meter Input',   type: 'generation',   value: +totalMwh.toFixed(2),  unit: 'MWh', x: 60,  y: 120 },
+    { id: 'tr1',   label: substationId,    type: 'transmission', value: +totalMwh.toFixed(2),  unit: 'MWh', x: 280, y: 120 },
+    { id: 'dist1', label: 'Delivered',     type: 'distribution', value: +outputMwh.toFixed(2), unit: 'MWh', x: 500, y: 60  },
+    { id: 'dist2', label: 'Losses',        type: 'distribution', value: +lossMwh.toFixed(2),   unit: 'MWh', x: 500, y: 250 },
+    { id: 'cons1', label: 'Load Served',   type: 'consumer',     value: +outputMwh.toFixed(2), unit: 'MWh', x: 700, y: 60  },
+    {
+      id: 'cons2',
+      label: `Residual ${residualPct.toFixed(1)}%`,
+      type: 'consumer',
+      value: +lossMwh.toFixed(2),
+      unit: 'MWh',
+      x: 700,
+      y: 250,
+    },
+    { id: 'info1', label: `Confidence ${confidence.toFixed(0)}%`, type: 'consumer', value: session.rowsParsed, unit: 'rows', x: 700, y: 380 },
+  ]
+
+  const edges: FlowEdge[] = [
+    { from: 'gen1',  to: 'tr1',   power: Math.round(totalMwh) },
+    { from: 'tr1',   to: 'dist1', power: Math.round(outputMwh) },
+    { from: 'tr1',   to: 'dist2', power: Math.round(lossMwh), loss: Math.round(lossMwh * 0.5) },
+    { from: 'dist1', to: 'cons1', power: Math.round(outputMwh) },
+    { from: 'dist2', to: 'cons2', power: Math.round(lossMwh) },
+  ]
+
+  return { nodes, edges }
 }
 
 export function PowerFlowAnimation() {
@@ -76,11 +160,33 @@ export function PowerFlowAnimation() {
   const animRef = useRef<number>(0)
   const particlesRef = useRef<Particle[]>([])
   const nextIdRef = useRef(0)
+  const [dashboardData, setDashboardData] = useState<any>(null)
+
+  const activeSession = useAppStore(s => s.activeSession)
+
+  // Fetch dashboard data for real flow
+  useEffect(() => {
+    api.getDashboard().then(d => setDashboardData(d)).catch(() => {})
+  }, [activeSession])
+
+  // Determine which nodes/edges to use
+  const { nodes, edges, isRealData } = useMemo(() => {
+    // Prefer active session (just uploaded)
+    const sessionFlow = buildNodesFromSession(activeSession)
+    if (sessionFlow) return { ...sessionFlow, isRealData: true }
+    // Fall back to dashboard API data
+    const dashFlow = buildNodesFromDashboard(dashboardData)
+    if (dashFlow) return { ...dashFlow, isRealData: true }
+    // Fall back to demo
+    return { nodes: DEFAULT_NODES, edges: DEFAULT_EDGES, isRealData: false }
+  }, [activeSession, dashboardData])
+
+  const nodeMap = useMemo(() => new Map(nodes.map(n => [n.id, n])), [nodes])
 
   useEffect(() => {
     // Initialise particles per edge
-    const initial: Particle[] = DEFAULT_EDGES.flatMap((_, i) => [
-      { id: nextIdRef.current++, edgeIdx: i, progress: 0,   speed: 0.003 + Math.random() * 0.003 },
+    const initial: Particle[] = edges.flatMap((_, i) => [
+      { id: nextIdRef.current++, edgeIdx: i, progress: 0,    speed: 0.003 + Math.random() * 0.003 },
       { id: nextIdRef.current++, edgeIdx: i, progress: 0.33, speed: 0.003 + Math.random() * 0.003 },
       { id: nextIdRef.current++, edgeIdx: i, progress: 0.66, speed: 0.003 + Math.random() * 0.003 },
     ])
@@ -99,9 +205,7 @@ export function PowerFlowAnimation() {
     }
     animRef.current = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(animRef.current)
-  }, [])
-
-  const nodeMap = new Map(DEFAULT_NODES.map(n => [n.id, n]))
+  }, [edges])
 
   function edgePoints(edge: FlowEdge) {
     const from = nodeMap.get(edge.from)
@@ -111,7 +215,7 @@ export function PowerFlowAnimation() {
   }
 
   function particlePos(p: Particle) {
-    const edge = DEFAULT_EDGES[p.edgeIdx]
+    const edge = edges[p.edgeIdx]
     if (!edge) return null
     const pts = edgePoints(edge)
     if (!pts) return null
@@ -128,11 +232,16 @@ export function PowerFlowAnimation() {
   return (
     <div className="panel" style={{ padding: 0, overflow: 'hidden', position: 'relative' }}>
       {/* Header */}
-      <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--cyan)' }}>
-          ⚡ Live Power Flow — National Grid
+          ⚡ {isRealData ? `Live Power Flow — ${activeSession?.substationId ?? 'Uploaded Data'}` : 'Power Flow — Demo Data'}
         </div>
-        <div style={{ display: 'flex', gap: 16 }}>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          {isRealData && (
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--green)', border: '1px solid rgba(5,232,154,0.3)', borderRadius: 4, padding: '2px 7px' }}>
+              ● Real Data
+            </span>
+          )}
           {(['generation', 'transmission', 'distribution', 'consumer'] as FlowNode['type'][]).map(t => (
             <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span style={{ width: 8, height: 8, borderRadius: 2, background: NODE_COLORS[t].border, display: 'inline-block' }} />
@@ -146,13 +255,14 @@ export function PowerFlowAnimation() {
       <div style={{ position: 'relative', width: '100%', overflowX: 'auto' }}>
         <svg ref={svgRef} viewBox="0 0 800 440" style={{ width: '100%', minWidth: 600, height: 'auto', display: 'block' }}>
           <defs>
-            {DEFAULT_EDGES.map((edge, i) => {
-              const pts = edgePoints(edge)
-              if (!pts) return null
+            {edges.map((edge, i) => {
+              const fromNode = nodeMap.get(edge.from)
+              const toNode = nodeMap.get(edge.to)
+              if (!fromNode || !toNode) return null
               return (
                 <linearGradient key={i} id={`edge-grad-${i}`} x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor={NODE_COLORS[nodeMap.get(edge.from)!.type].border} stopOpacity="0.4" />
-                  <stop offset="100%" stopColor={NODE_COLORS[nodeMap.get(edge.to)!.type].border} stopOpacity="0.4" />
+                  <stop offset="0%" stopColor={NODE_COLORS[fromNode.type].border} stopOpacity="0.4" />
+                  <stop offset="100%" stopColor={NODE_COLORS[toNode.type].border} stopOpacity="0.4" />
                 </linearGradient>
               )
             })}
@@ -165,7 +275,7 @@ export function PowerFlowAnimation() {
           <rect width="800" height="440" fill="url(#pf-grid)" />
 
           {/* Edges */}
-          {DEFAULT_EDGES.map((edge, i) => {
+          {edges.map((edge, i) => {
             const pts = edgePoints(edge)
             if (!pts) return null
             const cp1x = pts.x1 + (pts.x2 - pts.x1) * 0.3
@@ -178,7 +288,7 @@ export function PowerFlowAnimation() {
                   d={`M ${pts.x1} ${pts.y1} C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${pts.x2} ${pts.y2}`}
                   fill="none"
                   stroke={`url(#edge-grad-${i})`}
-                  strokeWidth={Math.max(1.5, edge.power / 200)}
+                  strokeWidth={Math.max(MIN_STROKE_WIDTH, Math.min(edge.power / POWER_SCALE_FACTOR, MAX_STROKE_WIDTH))}
                   strokeDasharray="6 4"
                 />
                 {/* Power label */}
@@ -190,7 +300,7 @@ export function PowerFlowAnimation() {
                   fontSize="8"
                   fontFamily="var(--font-mono)"
                 >
-                  {edge.power}MW
+                  {edge.power}{isRealData ? 'MWh' : 'MW'}
                 </text>
               </g>
             )
@@ -200,7 +310,7 @@ export function PowerFlowAnimation() {
           {particles.map(p => {
             const pos = particlePos(p)
             if (!pos) return null
-            const edge = DEFAULT_EDGES[p.edgeIdx]
+            const edge = edges[p.edgeIdx]
             const fromNode = nodeMap.get(edge?.from || '')
             const color = fromNode ? NODE_COLORS[fromNode.type].border : '#00D4FF'
             const opacity = Math.sin(p.progress * Math.PI) * 0.9
@@ -218,7 +328,7 @@ export function PowerFlowAnimation() {
           })}
 
           {/* Nodes */}
-          {DEFAULT_NODES.map(node => {
+          {nodes.map(node => {
             const colors = NODE_COLORS[node.type]
             const isHovered = hoveredNode?.id === node.id
             return (
@@ -242,13 +352,13 @@ export function PowerFlowAnimation() {
                 <text x={8} y={20} fontSize={14}>{NODE_ICONS[node.type]}</text>
                 {/* Label */}
                 <text x={28} y={16} fontSize={9} fontFamily="var(--font-mono)" fill={colors.text} fontWeight="600">
-                  {node.label}
+                  {node.label.length > MAX_LABEL_LENGTH ? node.label.slice(0, TRUNCATE_LENGTH) + '…' : node.label}
                 </text>
                 {/* Value */}
                 <text x={28} y={30} fontSize={11} fontFamily="var(--font-mono)" fill="var(--text-primary)">
                   {node.value}<tspan fontSize={8} fill="var(--text-tertiary)"> {node.unit}</tspan>
                 </text>
-                {/* Pulse ring for critical/active */}
+                {/* Pulse ring for hovered */}
                 {isHovered && (
                   <rect
                     x={-8} y={-8} width={136} height={60}
@@ -304,3 +414,4 @@ function cubicBezier(t: number, p0: number, p1: number, p2: number, p3: number) 
   const mt = 1 - t
   return mt * mt * mt * p0 + 3 * mt * mt * t * p1 + 3 * mt * t * t * p2 + t * t * t * p3
 }
+

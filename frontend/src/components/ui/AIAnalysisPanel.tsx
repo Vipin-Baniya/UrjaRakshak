@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useAppStore } from '@/store/useAppStore'
 
 interface AIInsight {
   id: string
@@ -101,34 +102,162 @@ function TypingText({ text, speed = 18 }: TypingTextProps) {
   return (
     <span>
       {displayed}
-      {!done && <span style={{ borderRight: '1.5px solid var(--cyan)', marginLeft: 1, animation: 'none' }}>|</span>}
+      {!done && <span className="typewriter-cursor" />}
     </span>
   )
 }
 
+/** Max confidence score reported */
+const CONFIDENCE_MAX = 99
+/** Weight of z-score in confidence calculation */
+const Z_SCORE_CONFIDENCE_WEIGHT = 15
+/** Base confidence before z-score contribution */
+const CONFIDENCE_BASE = 40
+/** Z-score threshold for 'high' severity classification */
+const HIGH_SEVERITY_Z = 3
+
+/** Build real AI insights from a live analysis session */
+function buildInsightsFromSession(session: ReturnType<typeof useAppStore.getState>['activeSession']): AIInsight[] {
+  if (!session) return []
+  const insights: AIInsight[] = []
+  const ts = new Date(session.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  const substation = session.substationId
+
+  // Residual loss insight
+  const residual = session.stats.residual_pct
+  if (residual > 8) {
+    insights.push({
+      id: 'r1',
+      type: 'alert',
+      title: `High residual loss: ${residual.toFixed(1)}%`,
+      detail: `${substation} shows ${residual.toFixed(1)}% residual loss — significantly above the 3% safe threshold. ${session.stats.anomalies_detected} anomalous readings detected. Possible cause: meter bypass, transformer fault, or cable losses.`,
+      confidence: Math.round(session.stats.confidence_score),
+      substation,
+      timestamp: ts,
+      severity: 'high',
+    })
+  } else if (residual > 3) {
+    insights.push({
+      id: 'r1',
+      type: 'anomaly',
+      title: `Moderate residual loss: ${residual.toFixed(1)}%`,
+      detail: `${substation} shows ${residual.toFixed(1)}% residual loss — above the 3% monitoring threshold. Recommend scheduling an inspection to rule out meter drift or minor tapping.`,
+      confidence: Math.round(session.stats.confidence_score),
+      substation,
+      timestamp: ts,
+      severity: 'medium',
+    })
+  } else {
+    insights.push({
+      id: 'r1',
+      type: 'forecast',
+      title: `Healthy residual: ${residual.toFixed(1)}%`,
+      detail: `${substation} is operating within safe parameters. Residual loss ${residual.toFixed(1)}% is below the 3% threshold. Physics engine confidence: ${session.stats.confidence_score.toFixed(0)}%.`,
+      confidence: Math.round(session.stats.confidence_score),
+      substation,
+      timestamp: ts,
+      severity: 'low',
+    })
+  }
+
+  // Anomaly rate insight
+  const anomalyRate = session.stats.anomaly_rate_pct
+  if (anomalyRate > 5) {
+    insights.push({
+      id: 'a1',
+      type: 'anomaly',
+      title: `Anomaly rate: ${anomalyRate.toFixed(1)}%`,
+      detail: `${session.stats.anomalies_detected} anomalous meter readings out of ${session.rowsParsed} parsed — a ${anomalyRate.toFixed(1)}% anomaly rate. Isolation Forest + Z-score detected unusual consumption spikes.`,
+      confidence: Math.min(95, Math.round(anomalyRate * 4 + 60)),
+      substation,
+      timestamp: ts,
+      severity: anomalyRate > 15 ? 'high' : 'medium',
+    })
+  }
+
+  // Energy balance insight
+  insights.push({
+    id: 'e1',
+    type: 'recommendation',
+    title: `Energy throughput: ${session.stats.total_energy_kwh.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`,
+    detail: `Total energy recorded: ${session.stats.total_energy_kwh.toFixed(0)} kWh across ${session.rowsParsed} meter readings at ${substation}. Physics engine validated this batch with ${session.stats.confidence_score.toFixed(0)}% confidence.`,
+    confidence: Math.round(session.stats.confidence_score),
+    substation,
+    timestamp: ts,
+    severity: 'low',
+  })
+
+  // Sample anomaly if available
+  if (session.anomalySample?.length > 0) {
+    const top = session.anomalySample[0]
+    insights.push({
+      id: 'sa1',
+      type: 'alert',
+      title: `Top anomaly: meter ${top.meter_id}`,
+      detail: `Meter ${top.meter_id} recorded ${top.energy_kwh.toFixed(2)} kWh vs expected ${top.expected_kwh.toFixed(2)} kWh (z-score: ${top.z_score?.toFixed(1) ?? 'N/A'}). Reason: ${top.reason}.`,
+      confidence: Math.min(CONFIDENCE_MAX, Math.round(Math.abs(top.z_score ?? HIGH_SEVERITY_Z) * Z_SCORE_CONFIDENCE_WEIGHT + CONFIDENCE_BASE)),
+      substation,
+      timestamp: new Date(top.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+      severity: Math.abs(top.z_score ?? 0) > HIGH_SEVERITY_Z ? 'high' : 'medium',
+    })
+  }
+
+  // AI interpretation if available
+  if (session.aiInterpretation) {
+    const interp = session.aiInterpretation
+    const summary: string = interp?.analysis?.summary ?? interp?.summary ?? ''
+    if (summary) {
+      insights.push({
+        id: 'ai1',
+        type: 'recommendation',
+        title: 'AI interpretation ready',
+        detail: summary.length > 200 ? summary.slice(0, 200) + '…' : summary,
+        confidence: Math.round(session.stats.confidence_score),
+        substation,
+        timestamp: ts,
+        severity: 'low',
+      })
+    }
+  }
+
+  return insights
+}
+
 export function AIAnalysisPanel() {
-  const [insights, setInsights] = useState<AIInsight[]>([])
+  const activeSession = useAppStore(s => s.activeSession)
   const [activeIdx, setActiveIdx] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [filter, setFilter] = useState<AIInsight['type'] | 'all'>('all')
 
+  // Build insights from real data, fall back to mock
+  const insights = useMemo(() => {
+    const real = buildInsightsFromSession(activeSession)
+    return real.length > 0 ? real : MOCK_INSIGHTS
+  }, [activeSession])
+
+  const isRealData = useMemo(() => {
+    const real = buildInsightsFromSession(activeSession)
+    return real.length > 0
+  }, [activeSession])
+
   useEffect(() => {
-    // Simulate streaming AI insights loading
     setIsLoading(true)
     const timer = setTimeout(() => {
-      setInsights(MOCK_INSIGHTS)
       setIsLoading(false)
-    }, 800)
+    }, 600)
     return () => clearTimeout(timer)
-  }, [])
+  }, [insights])
+
+  // Reset active index on insights or filter change
+  useEffect(() => { setActiveIdx(0) }, [insights, filter])
 
   // Auto-rotate active insight
   useEffect(() => {
     const id = setInterval(() => {
-      setActiveIdx(i => (i + 1) % MOCK_INSIGHTS.length)
+      setActiveIdx(i => (i + 1) % Math.max(1, insights.length))
     }, 7000)
     return () => clearInterval(id)
-  }, [])
+  }, [insights])
 
   const filtered = filter === 'all' ? insights : insights.filter(i => i.type === filter)
   const active   = filtered[activeIdx % Math.max(1, filtered.length)]
@@ -150,11 +279,15 @@ export function AIAnalysisPanel() {
           <div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-primary)', fontWeight: 600 }}>AI Analysis Engine</div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, color: 'var(--text-dim)', letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 1 }}>
-              Anomaly · Forecast · Physics
+              {isRealData ? (
+                <span style={{ color: 'var(--green)' }}>● Live data · {activeSession?.substationId}</span>
+              ) : (
+                'Demo · Upload data for live analysis'
+              )}
             </div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           {(['all', 'anomaly', 'forecast', 'alert', 'recommendation'] as const).map(t => (
             <button
               key={t}
@@ -291,3 +424,4 @@ export function AIAnalysisPanel() {
     </div>
   )
 }
+

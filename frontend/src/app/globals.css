@@ -4,7 +4,9 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* ── Dark theme (default) ──────────────────────────────────────────────── */
+:root,
+[data-theme="dark"] {
   --bg-void:       #01030A;
   --bg-base:       #050C18;
   --bg-panel:      #091122;
@@ -48,6 +50,82 @@
   --shadow-glow-cyan: 0 0 24px rgba(10,240,255,0.20);
   --shadow-glow-blue: 0 0 24px rgba(77,148,255,0.18);
 }
+
+/* ── Light theme ───────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg-void:       #F0F4F8;
+  --bg-base:       #FAFBFC;
+  --bg-panel:      #FFFFFF;
+  --bg-hover:      #F0F4FA;
+  --bg-elevated:   #EDF1F8;
+  --bg-overlay:    rgba(250,251,252,0.97);
+  --border-ghost:  rgba(0,60,120,0.05);
+  --border-subtle: rgba(0,60,120,0.10);
+  --border-dim:    rgba(0,60,120,0.18);
+  --border-active: rgba(0,150,200,0.40);
+  --border-focus:  rgba(0,150,200,0.65);
+  --cyan:       #0090B8;
+  --cyan-dim:   rgba(0,144,184,0.10);
+  --cyan-glow:  rgba(0,144,184,0.07);
+  --amber:      #B86F00;
+  --amber-dim:  rgba(184,111,0,0.10);
+  --green:      #007A52;
+  --green-dim:  rgba(0,122,82,0.10);
+  --red:        #CC1A30;
+  --red-dim:    rgba(204,26,48,0.10);
+  --blue:       #1A5FCC;
+  --blue-dim:   rgba(26,95,204,0.10);
+  --violet:     #5B35CC;
+  --violet-dim: rgba(91,53,204,0.10);
+  --text-primary:   #0D1420;
+  --text-secondary: #2E4060;
+  --text-tertiary:  #5A7090;
+  --text-dim:       #A0B4C8;
+  --shadow-sm:  0 2px 8px rgba(0,0,0,0.10);
+  --shadow-md:  0 4px 20px rgba(0,0,0,0.14);
+  --shadow-lg:  0 8px 40px rgba(0,0,0,0.20);
+  --shadow-glow-cyan: 0 0 24px rgba(0,144,184,0.16);
+  --shadow-glow-blue: 0 0 24px rgba(26,95,204,0.14);
+}
+
+/* ── System default: light when OS prefers light ───────────────────────── */
+@media (prefers-color-scheme: light) {
+  [data-theme="system"] {
+    --bg-void:       #F0F4F8;
+    --bg-base:       #FAFBFC;
+    --bg-panel:      #FFFFFF;
+    --bg-hover:      #F0F4FA;
+    --bg-elevated:   #EDF1F8;
+    --bg-overlay:    rgba(250,251,252,0.97);
+    --border-ghost:  rgba(0,60,120,0.05);
+    --border-subtle: rgba(0,60,120,0.10);
+    --border-dim:    rgba(0,60,120,0.18);
+    --border-active: rgba(0,150,200,0.40);
+    --border-focus:  rgba(0,150,200,0.65);
+    --cyan:       #0090B8;
+    --cyan-dim:   rgba(0,144,184,0.10);
+    --cyan-glow:  rgba(0,144,184,0.07);
+    --amber:      #B86F00;
+    --amber-dim:  rgba(184,111,0,0.10);
+    --green:      #007A52;
+    --green-dim:  rgba(0,122,82,0.10);
+    --red:        #CC1A30;
+    --red-dim:    rgba(204,26,48,0.10);
+    --blue:       #1A5FCC;
+    --blue-dim:   rgba(26,95,204,0.10);
+    --violet:     #5B35CC;
+    --violet-dim: rgba(91,53,204,0.10);
+    --text-primary:   #0D1420;
+    --text-secondary: #2E4060;
+    --text-tertiary:  #5A7090;
+    --text-dim:       #A0B4C8;
+    --shadow-sm:  0 2px 8px rgba(0,0,0,0.10);
+    --shadow-md:  0 4px 20px rgba(0,0,0,0.14);
+    --shadow-lg:  0 8px 40px rgba(0,0,0,0.20);
+    --shadow-glow-cyan: 0 0 24px rgba(0,144,184,0.16);
+    --shadow-glow-blue: 0 0 24px rgba(26,95,204,0.14);
+  }
+}
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; scroll-behavior: smooth; height: 100%; }
 body {
@@ -61,6 +139,22 @@ body {
     radial-gradient(ellipse 65% 45% at 10% 0%, rgba(10,240,255,0.055) 0%, transparent 55%),
     radial-gradient(ellipse 45% 35% at 90% 8%, rgba(77,148,255,0.04) 0%, transparent 52%),
     radial-gradient(ellipse 30% 25% at 50% 100%, rgba(155,114,255,0.025) 0%, transparent 50%);
+  transition: background var(--t-slow), color var(--t-base);
+}
+[data-theme="light"] body,
+html[data-theme="light"] body {
+  background-image:
+    radial-gradient(ellipse 65% 45% at 10% 0%, rgba(0,144,184,0.04) 0%, transparent 55%),
+    radial-gradient(ellipse 45% 35% at 90% 8%, rgba(26,95,204,0.03) 0%, transparent 52%),
+    radial-gradient(ellipse 30% 25% at 50% 100%, rgba(91,53,204,0.02) 0%, transparent 50%);
+}
+@media (prefers-color-scheme: light) {
+  html[data-theme="system"] body {
+    background-image:
+      radial-gradient(ellipse 65% 45% at 10% 0%, rgba(0,144,184,0.04) 0%, transparent 55%),
+      radial-gradient(ellipse 45% 35% at 90% 8%, rgba(26,95,204,0.03) 0%, transparent 52%),
+      radial-gradient(ellipse 30% 25% at 50% 100%, rgba(91,53,204,0.02) 0%, transparent 50%);
+  }
 }
 .app-shell { padding-top: var(--nav-h); min-height: 100vh; display: flex; flex-direction: column; }
 .app-main { flex: 1; }
@@ -69,13 +163,14 @@ body {
 .nav-bar {
   position: fixed; top: 0; left: 0; right: 0;
   height: var(--nav-h);
-  background: rgba(5,12,24,0.92);
+  background: color-mix(in srgb, var(--bg-base) 92%, transparent);
   backdrop-filter: blur(28px) saturate(200%);
   -webkit-backdrop-filter: blur(28px) saturate(200%);
   border-bottom: 1px solid var(--border-subtle);
   z-index: 1000;
   display: flex; align-items: center;
   padding: 0 var(--page-pad-x);
+  transition: background var(--t-slow), border-color var(--t-base);
 }
 .nav-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; flex-shrink: 0; margin-right: 8px; }
 .nav-brand-mark {
@@ -185,6 +280,25 @@ body {
 .btn-icon { width:38px; height:38px; padding:0; border-radius:50%; }
 .btn-icon-sm { width:30px; height:30px; padding:0; border-radius:50%; }
 
+/* Animated shimmer button */
+.btn-animated { background-size: 200% auto; transition: background-position 0.5s ease, box-shadow var(--t-fast), transform var(--t-fast); }
+.btn-animated.btn-primary {
+  background-image: linear-gradient(90deg, var(--cyan) 0%, #7DF9FF 50%, var(--cyan) 100%);
+  background-size: 200% auto;
+  animation: shimmerBtn 2.8s linear infinite;
+}
+@keyframes shimmerBtn {
+  0%   { background-position: 0% center; }
+  100% { background-position: 200% center; }
+}
+/* Light theme button adjustments */
+[data-theme="light"] .btn-secondary { background: rgba(0,0,0,0.04); }
+[data-theme="light"] .btn-secondary:hover { background: rgba(0,0,0,0.07); }
+@media (prefers-color-scheme: light) {
+  [data-theme="system"] .btn-secondary { background: rgba(0,0,0,0.04); }
+  [data-theme="system"] .btn-secondary:hover { background: rgba(0,0,0,0.07); }
+}
+
 /* CHIPS */
 .chip { display:inline-flex; align-items:center; gap:5px; font-family:var(--font-mono); font-size:9.5px; letter-spacing:0.06em; text-transform:uppercase; padding:4px 10px; border-radius:var(--r-full); border:1px solid; white-space:nowrap; transition:all var(--t-fast); cursor:default; }
 .chip:not([disabled]):hover { transform: translateY(-1px) scale(1.04); filter: brightness(1.18); }
@@ -277,6 +391,37 @@ select.input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://ww
 .stagger-4 { animation-delay:.20s; opacity:0; animation-fill-mode:forwards; }
 .stagger-5 { animation-delay:.25s; opacity:0; animation-fill-mode:forwards; }
 
+/* Typewriter cursor blink */
+@keyframes cursorBlink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+.typewriter-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--cyan);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: cursorBlink 0.9s step-start infinite;
+  border-radius: 1px;
+}
+
+/* Animated gradient text */
+@keyframes gradientShift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.gradient-text {
+  background: linear-gradient(90deg, var(--cyan), var(--blue), var(--violet), var(--cyan));
+  background-size: 300% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientShift 4s linear infinite;
+}
+
 /* BAR CHART (animated height) */
 .bar-chart { display:flex; align-items:flex-end; gap:4px; height:64px; }
 .bar-chart-bar {
@@ -312,6 +457,8 @@ select.input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://ww
   border-radius: var(--r-lg);
   border: 1px solid rgba(255,255,255,0.10);
 }
+[data-theme="light"] .glass { background: rgba(255,255,255,0.75); border-color: rgba(0,0,0,0.08); }
+@media (prefers-color-scheme: light) { [data-theme="system"] .glass { background: rgba(255,255,255,0.75); border-color: rgba(0,0,0,0.08); } }
 .glass-cyan {
   background: rgba(10,240,255,0.06);
   backdrop-filter: blur(14px);

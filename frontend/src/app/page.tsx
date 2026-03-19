@@ -176,15 +176,7 @@ export default function Home() {
             minWidth: 'clamp(200px, 28vw, 420px)',
           }}>
             {typewriterText}
-            <span style={{
-              display: 'inline-block',
-              width: 3,
-              height: '0.85em',
-              background: 'var(--cyan)',
-              marginLeft: 3,
-              verticalAlign: 'middle',
-              animation: 'cursorBlink 1s step-end infinite',
-            }} />
+            <span className="typewriter-cursor" style={{ background: 'var(--cyan)', WebkitTextFillColor: 'initial' }} />
           </span>
         </h1>
 
@@ -199,7 +191,7 @@ export default function Home() {
         </p>
 
         <div className="fade-in stagger-4" style={{ display: 'flex', gap: 12, marginBottom: 68, flexWrap: 'wrap', alignItems: 'center' }}>
-          <Link href="/dashboard" className="btn btn-primary btn-lg">
+          <Link href="/dashboard" className="btn btn-primary btn-lg btn-animated">
             <span>Launch Dashboard</span>
             <span>→</span>
           </Link>
