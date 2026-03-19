@@ -18,7 +18,7 @@ import uuid
 from datetime import datetime
 from sqlalchemy import (
     Column, String, Float, Boolean, Integer,
-    DateTime, ForeignKey, Text, Index, JSON
+    DateTime, Date, ForeignKey, Text, Index, JSON
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -46,7 +46,7 @@ class User(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Password recovery fields
-    date_of_birth = Column(String(20), nullable=True)        # stored as YYYY-MM-DD string
+    date_of_birth = Column(Date, nullable=True)                # stored as DATE
     security_question = Column(String(255), nullable=True)   # e.g. "Mother's maiden name"
     security_answer_hash = Column(String(255), nullable=True)  # bcrypt hash of lowercased answer
 

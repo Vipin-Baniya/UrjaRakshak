@@ -107,7 +107,7 @@ async def forgot_password_verify(
 
     # Verify via DOB
     if payload.date_of_birth and user.date_of_birth:
-        if payload.date_of_birth.strip() == user.date_of_birth.strip():
+        if payload.date_of_birth == user.date_of_birth:
             verified = True
 
     # Verify via security answer (check even if DOB already passed)
@@ -144,7 +144,7 @@ async def forgot_password_reset(
 
     verified = False
     if payload.date_of_birth and user.date_of_birth:
-        if payload.date_of_birth.strip() == user.date_of_birth.strip():
+        if payload.date_of_birth == user.date_of_birth:
             verified = True
     if payload.security_answer and user.security_answer_hash:
         if verify_password(payload.security_answer.strip().lower(), user.security_answer_hash):
