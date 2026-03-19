@@ -420,12 +420,21 @@ export const streamApi = {
    */
   openSimulation: (
     substationId: string,
-    opts?: { meterCount?: number; intervalMs?: number }
+    opts?: {
+      meterCount?: number
+      intervalMs?: number
+      baselineMinKwh?: number
+      baselineMaxKwh?: number
+      anomalyPct?: number
+    }
   ): EventSource => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('urjarakshak_token') : null
     const params = new URLSearchParams()
     if (opts?.meterCount) params.set('meter_count', String(opts.meterCount))
     if (opts?.intervalMs) params.set('interval_ms', String(opts.intervalMs))
+    if (opts?.baselineMinKwh !== undefined) params.set('baseline_min_kwh', String(opts.baselineMinKwh))
+    if (opts?.baselineMaxKwh !== undefined) params.set('baseline_max_kwh', String(opts.baselineMaxKwh))
+    if (opts?.anomalyPct !== undefined) params.set('anomaly_pct', String(opts.anomalyPct))
     // EventSource doesn't support custom headers; pass token as query param
     if (token) params.set('token', token)
     const url = `${BASE}/api/v1/stream/simulate/${substationId}?${params.toString()}`

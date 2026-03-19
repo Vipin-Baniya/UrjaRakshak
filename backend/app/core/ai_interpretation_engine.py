@@ -411,42 +411,133 @@ class AIInterpretationEngine:
 
     @staticmethod
     def _offline_result(inp: AIInterpretationInput, prompt_hash: str) -> AIInterpretationResult:
-        """Return a deterministic offline result when no API key is configured."""
-        # Map GHI classification to risk level
-        risk_map = {
+        """
+        Deterministic rule-based interpretation when no external AI key is configured.
+
+        Uses physics thresholds, GHI components, and anomaly rates to generate
+        structured, domain-specific explanations — no LLM required.
+        """
+        # ── Risk level from multiple signals ──────────────────────────────
+        risk_map_ghi = {
             "HEALTHY": "LOW", "STABLE": "LOW",
             "DEGRADED": "MEDIUM", "CRITICAL": "HIGH", "SEVERE": "CRITICAL",
         }
-        risk = risk_map.get(inp.ghi_class, "MEDIUM")
+        risk_from_ghi = risk_map_ghi.get(inp.ghi_class, "MEDIUM")
+        _risk_levels = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+
+        def _upgrade_risk(current: str, candidate: str) -> str:
+            """Return the higher of two risk levels; falls back to 'MEDIUM' for unknown values."""
+            curr_idx = _risk_levels.index(current) if current in _risk_levels else 1
+            cand_idx = _risk_levels.index(candidate) if candidate in _risk_levels else 1
+            return _risk_levels[max(curr_idx, cand_idx)]
+
+        # Override risk upward based on residual and anomaly rate
+        if inp.residual_pct > 15 or inp.anomaly_rate > 0.20:
+            risk = "CRITICAL"
+        elif inp.residual_pct > 10 or inp.anomaly_rate > 0.10:
+            risk = "HIGH"
+        elif inp.residual_pct > 5 or inp.anomaly_rate > 0.05:
+            risk = _upgrade_risk(risk_from_ghi, "MEDIUM")
+        else:
+            risk = risk_from_ghi
+
+        # ── Primary hypothesis ─────────────────────────────────────────────
+        if inp.residual_pct > 10 and inp.anomaly_rate > 0.10:
+            hypothesis = (
+                f"Substation {inp.substation_id}: combined high residual loss "
+                f"({inp.residual_pct:.1f}%) and elevated anomaly rate ({inp.anomaly_rate*100:.1f}%) "
+                f"suggest simultaneous technical losses and possible non-technical losses. "
+                f"Infrastructure audit and metering review are both warranted."
+            )
+        elif inp.residual_pct > 10:
+            hypothesis = (
+                f"Substation {inp.substation_id}: residual energy gap of {inp.residual_pct:.1f}% "
+                f"exceeds normal technical-loss range (2–5%). "
+                f"Likely causes: transformer efficiency degradation, line resistance increase, "
+                f"or unmetered connections. Field inspection recommended."
+            )
+        elif inp.anomaly_rate > 0.10:
+            hypothesis = (
+                f"Substation {inp.substation_id}: anomaly rate of {inp.anomaly_rate*100:.1f}% "
+                f"is above the expected 2–5% baseline. "
+                f"Individual meter readings show irregular consumption patterns. "
+                f"Meter health verification and tamper inspection advised."
+            )
+        elif inp.ghi < 50:
+            hypothesis = (
+                f"Substation {inp.substation_id} GHI score is low ({inp.ghi:.1f}/100). "
+                f"PBS={inp.pbs:.3f}, ASS={inp.ass:.3f}, DIS={inp.dis:.3f}. "
+                f"Grid health is below acceptable threshold — engineering review required."
+            )
+        else:
+            hypothesis = (
+                f"Substation {inp.substation_id} is operating within normal parameters. "
+                f"Residual loss of {inp.residual_pct:.2f}% is within technical-loss bounds. "
+                f"GHI {inp.ghi:.1f} ({inp.ghi_class}). Routine monitoring is sufficient."
+            )
+
+        # ── Recommended actions based on findings ─────────────────────────
+        actions = []
+        if inp.residual_pct > 10:
+            actions.append(
+                f"Investigate unexplained energy loss of {inp.residual_pct:.1f}% — "
+                "check transformer efficiency, line losses, and unmetered connections"
+            )
+        if inp.anomaly_rate > 0.05:
+            actions.append(
+                f"Review {inp.anomalies_flagged} flagged meters for tamper indicators "
+                "and verify calibration records"
+            )
+        if inp.dis < 0.8:
+            actions.append("Improve data quality — check AMR communication links and meter clocks")
+        if inp.pbs < 0.7:
+            actions.append("Physics balance score low — verify input and output meter accuracy")
+        if not actions:
+            actions = [
+                "Continue routine meter reading schedule",
+                "Verify transformer oil levels and cooling system as part of preventive maintenance",
+            ]
+        # Always include escalation path
+        actions.append(
+            f"Re-run analysis after corrective actions to confirm GHI improvement above 70"
+        )
+
+        # ── Confidence commentary ──────────────────────────────────────────
+        conf_commentary = (
+            f"Deterministic rule-based analysis — confidence: {inp.confidence*100:.0f}%. "
+            f"GHI sub-scores: PBS={inp.pbs:.2f}, ASS={inp.ass:.2f}, CS={inp.cs:.2f}, "
+            f"TSS={inp.tss:.2f}, DIS={inp.dis:.2f}. "
+            f"Configure ANTHROPIC_API_KEY or OPENAI_API_KEY for LLM-based interpretation."
+        )
+
+        # ── Trend assessment ───────────────────────────────────────────────
+        if len(inp.trend) >= 3:
+            recent_ghi = [t.get("ghi", 0) for t in inp.trend[-3:] if isinstance(t, dict)]
+            if len(recent_ghi) >= 2:
+                trend_dir = "improving" if recent_ghi[-1] > recent_ghi[0] else "declining"
+                trend_note = (
+                    f"GHI trend over last {len(recent_ghi)} analyses is {trend_dir}. "
+                    f"Latest: {recent_ghi[-1]:.1f}, Earlier: {recent_ghi[0]:.1f}."
+                )
+            else:
+                trend_note = f"{len(inp.trend)} data points available for trend analysis."
+        else:
+            trend_note = "Insufficient trend data — upload more analyses to track GHI changes."
 
         return AIInterpretationResult(
             risk_level=risk,
-            primary_infrastructure_hypothesis=(
-                f"GHI {inp.ghi:.1f} ({inp.ghi_class}). "
-                f"Residual {inp.residual_pct:.2f}% may indicate "
-                f"{inp.category.lower().replace('_', ' ')} issue. "
-                "Infrastructure inspection is recommended."
-            ),
+            primary_infrastructure_hypothesis=hypothesis,
             inspection_priority=inp.priority,
-            recommended_actions=[
-                "Schedule physical inspection of the substation infrastructure",
-                "Verify meter calibration dates and communication health",
-                "Review load schedules and reactive power compensation",
-            ],
-            confidence_commentary=(
-                f"Physics engine confidence: {inp.confidence*100:.0f}%. "
-                "AI interpretation offline — configure ANTHROPIC_API_KEY or OPENAI_API_KEY "
-                "for live LLM analysis."
-            ),
-            trend_assessment=(
-                f"{len(inp.trend)} data points available for trend analysis."
-                if inp.trend else "Insufficient trend data."
-            ),
+            recommended_actions=actions,
+            confidence_commentary=conf_commentary,
+            trend_assessment=trend_note,
             estimated_investigation_scope=(
-                "SENIOR_ENGINEER" if inp.ghi < 50 else "FIELD_CREW"
+                "SENIOR_ENGINEER" if inp.ghi < 50
+                else "FIELD_CREW" if inp.ghi < 70
+                else "DESK_REVIEW"
             ),
             model_name="offline",
-            model_version="deterministic",
+            model_version="rule-based-v2",
             prompt_hash=prompt_hash,
             token_usage=0,
         )

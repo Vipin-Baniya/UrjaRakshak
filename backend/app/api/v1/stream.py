@@ -428,28 +428,43 @@ async def simulate_live_stream(
     substation_id: str,
     meter_count: int = Query(default=10, ge=1, le=50),
     interval_ms: int = Query(default=2000, ge=500, le=10000),
+    baseline_min_kwh: float = Query(default=3.0, ge=0.1, le=1000.0, description="Min baseline energy per meter (kWh)"),
+    baseline_max_kwh: float = Query(default=8.0, ge=0.1, le=1000.0, description="Max baseline energy per meter (kWh)"),
+    anomaly_pct: float = Query(default=5.0, ge=0.0, le=50.0, description="Anomaly injection probability (%)"),
     current_user: User = Depends(get_current_active_user),
 ) -> StreamingResponse:
     """
     Server-Sent Events stream that generates simulated meter readings for a
     substation. Useful for demos and UI development without real SCADA data.
 
-    Each event simulates a realistic energy reading with occasional anomalies
-    (≈5% probability) based on a per-meter rolling baseline.
+    Each event simulates a realistic energy reading with configurable anomaly
+    injection probability, baseline range, and update interval.
 
     Query params:
-      meter_count  — number of simulated meters (1–50, default 10)
-      interval_ms  — milliseconds between events (500–10000, default 2000)
+      meter_count       — number of simulated meters (1–50, default 10)
+      interval_ms       — milliseconds between events (500–10000, default 2000)
+      baseline_min_kwh  — min baseline energy per meter (default 3.0 kWh)
+      baseline_max_kwh  — max baseline energy per meter (default 8.0 kWh)
+      anomaly_pct       — anomaly injection probability in percent (default 5%)
     """
     import random
-    import math
 
-    # Per-meter rolling baselines (mean, std) seeded from substation_id
+    # Validate baseline range
+    if baseline_min_kwh >= baseline_max_kwh:
+        raise HTTPException(
+            status_code=422,
+            detail="baseline_min_kwh must be less than baseline_max_kwh"
+        )
+
+    anomaly_prob = anomaly_pct / 100.0
+
+    # Per-meter rolling baselines (mean, std) seeded from substation_id for reproducibility
     rng = random.Random(hash(substation_id) % (2**32))
+    std_range = max(0.1, (baseline_max_kwh - baseline_min_kwh) * 0.15)
     baselines: Dict[str, Dict[str, float]] = {
         f"SIM-{substation_id}-M{i+1:02d}": {
-            "mean": rng.uniform(3.0, 8.0),
-            "std": rng.uniform(0.3, 1.2),
+            "mean": rng.uniform(baseline_min_kwh, baseline_max_kwh),
+            "std": rng.uniform(std_range * 0.25, std_range),
         }
         for i in range(meter_count)
     }
@@ -465,8 +480,8 @@ async def simulate_live_stream(
                 baseline = baselines[meter_id]
                 mean, std = baseline["mean"], baseline["std"]
 
-                # Inject anomaly with ~5% probability
-                is_anomaly = rng.random() < 0.05
+                # Inject anomaly with configurable probability
+                is_anomaly = rng.random() < anomaly_prob
                 if is_anomaly:
                     # Spike or drop
                     direction = rng.choice([1, -1])

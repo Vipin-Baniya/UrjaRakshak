@@ -114,7 +114,9 @@ export default function UploadPage() {
         // Fetch full analysis detail in background
         api.getAnalysis(res.analysis_id).then((detail) => {
           updateSessionDetail(res.analysis_id!, detail)
-        }).catch(() => {})
+        }).catch((err) => {
+          console.warn('Could not fetch analysis detail:', err?.message)
+        })
 
         // Auto-fetch AI interpretation
         setAiLoading(true)
