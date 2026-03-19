@@ -18,7 +18,7 @@ Security:
 Author: Vipin Baniya
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import Optional, Dict, Any
 import logging
 
@@ -67,7 +67,7 @@ class UserCreate(BaseModel):
     )
     full_name: Optional[str] = None
     role: str = Field(default="viewer", pattern="^(admin|analyst|viewer)$")
-    date_of_birth: Optional[str] = None          # YYYY-MM-DD
+    date_of_birth: Optional[date] = None         # YYYY-MM-DD
     security_question: Optional[str] = None
     security_answer: Optional[str] = None
 
@@ -80,14 +80,14 @@ class UserLogin(BaseModel):
 class PasswordResetVerify(BaseModel):
     """Step 1 — verify identity before resetting password."""
     email: EmailStr
-    date_of_birth: Optional[str] = None          # YYYY-MM-DD
+    date_of_birth: Optional[date] = None         # YYYY-MM-DD
     security_answer: Optional[str] = None
 
 
 class PasswordReset(BaseModel):
     """Step 2 — set a new password after identity is verified."""
     email: EmailStr
-    date_of_birth: Optional[str] = None
+    date_of_birth: Optional[date] = None
     security_answer: Optional[str] = None
     new_password: str = Field(..., min_length=8, max_length=72)
 
@@ -201,7 +201,7 @@ async def create_user(user_data: UserCreate, db: AsyncSession) -> User:
     effective_role = "admin" if user_count == 0 else user_data.role
 
     # Prepare optional recovery fields
-    dob = user_data.date_of_birth.strip() if user_data.date_of_birth else None
+    dob = user_data.date_of_birth if user_data.date_of_birth else None
     sec_q = user_data.security_question.strip() if user_data.security_question else None
     sec_a_hash: Optional[str] = None
     if user_data.security_answer:
