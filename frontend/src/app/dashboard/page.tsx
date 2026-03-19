@@ -9,6 +9,8 @@ import { AIAnalysisPanel } from '@/components/ui/AIAnalysisPanel'
 import { FaultSimulator } from '@/components/ui/FaultSimulator'
 import { LiveMetricsChart } from '@/components/charts/LiveMetricsChart'
 import { TheftDetectionPanel } from '@/components/ui/TheftDetectionPanel'
+import { SessionBanner } from '@/components/ui/SessionBanner'
+import { useAppStore } from '@/store/useAppStore'
 
 // Lazy-load heavy SVG component (SSR-safe)
 const PowerFlowAnimation = dynamic(
@@ -35,6 +37,7 @@ export default function Dashboard() {
   const [lastFetched, setLastFetched] = useState('')
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
   const [role, setRole] = useState<'admin' | 'inspector' | 'consumer'>('admin')
+  const { selectedRegion } = useAppStore()
 
   const fetchData = useCallback(async () => {
     try {
@@ -122,6 +125,8 @@ export default function Dashboard() {
           <span style={{ marginLeft: 12, opacity: 0.7 }}>Start: <code>cd backend && uvicorn app.main:app --reload</code></span>
         </div>
       )}
+
+      <SessionBanner />
 
       {/* No data banner */}
       {!loading && data && !data.has_data && (
