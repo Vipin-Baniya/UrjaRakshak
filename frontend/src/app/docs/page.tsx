@@ -167,7 +167,7 @@ const CONTENT: Record<string, { title: string; body: React.ReactNode }> = {
         ))}
         <div className="sec-label" style={{ marginTop: 8 }}>Per-meter upload analysis</div>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-          When a CSV is uploaded, Z-scores are computed per meter against that meter's rolling
+          When a CSV is uploaded, Z-scores are computed per meter against that meter&apos;s rolling
           mean and standard deviation within the uploaded batch. The top anomalies by absolute
           Z-score are returned in the upload response.
         </p>

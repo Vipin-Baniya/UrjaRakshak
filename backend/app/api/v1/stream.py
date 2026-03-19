@@ -4,6 +4,7 @@ Real-Time Streaming API — UrjaRakshak v2.3
 POST /api/v1/stream/ingest          — Push a single live meter event (SCADA/AMI)
 POST /api/v1/stream/ingest/batch    — Push up to 100 events in one call
 GET  /api/v1/stream/live/{sub_id}   — Server-Sent Events stream for a substation
+GET  /api/v1/stream/simulate/{sub_id} — SSE simulation stream (no real data required)
 GET  /api/v1/stream/meter/{meter_id}/stability  — Current stability for one meter
 GET  /api/v1/stream/substation/{sub_id}/stability — All meters for a substation
 GET  /api/v1/stream/recent/{sub_id} — Last N events for a substation (REST fallback)
@@ -418,3 +419,90 @@ async def get_subscriber_count(
             if qs
         },
     }
+
+
+# ── Simulation SSE endpoint ────────────────────────────────────────────────
+
+@router.get("/simulate/{substation_id}")
+async def simulate_live_stream(
+    substation_id: str,
+    meter_count: int = Query(default=10, ge=1, le=50),
+    interval_ms: int = Query(default=2000, ge=500, le=10000),
+    current_user: User = Depends(get_current_active_user),
+) -> StreamingResponse:
+    """
+    Server-Sent Events stream that generates simulated meter readings for a
+    substation. Useful for demos and UI development without real SCADA data.
+
+    Each event simulates a realistic energy reading with occasional anomalies
+    (≈5% probability) based on a per-meter rolling baseline.
+
+    Query params:
+      meter_count  — number of simulated meters (1–50, default 10)
+      interval_ms  — milliseconds between events (500–10000, default 2000)
+    """
+    import random
+    import math
+
+    # Per-meter rolling baselines (mean, std) seeded from substation_id
+    rng = random.Random(hash(substation_id) % (2**32))
+    baselines: Dict[str, Dict[str, float]] = {
+        f"SIM-{substation_id}-M{i+1:02d}": {
+            "mean": rng.uniform(3.0, 8.0),
+            "std": rng.uniform(0.3, 1.2),
+        }
+        for i in range(meter_count)
+    }
+    meter_ids = list(baselines.keys())
+    interval_s = interval_ms / 1000.0
+
+    async def simulation_generator() -> AsyncGenerator[str, None]:
+        try:
+            yield f"data: {json.dumps({'type': 'connected', 'substation_id': substation_id, 'meter_count': meter_count, 'ts': datetime.utcnow().isoformat()})}\n\n"
+
+            while True:
+                meter_id = rng.choice(meter_ids)
+                baseline = baselines[meter_id]
+                mean, std = baseline["mean"], baseline["std"]
+
+                # Inject anomaly with ~5% probability
+                is_anomaly = rng.random() < 0.05
+                if is_anomaly:
+                    # Spike or drop
+                    direction = rng.choice([1, -1])
+                    energy = round(mean + direction * rng.uniform(3.0 * std, 5.0 * std), 3)
+                    energy = max(0.0, energy)
+                    z_score = round((energy - mean) / std, 2) if std > 0 else 0.0
+                else:
+                    energy = round(max(0.0, rng.gauss(mean, std)), 3)
+                    z_score = round((energy - mean) / std, 2) if std > 0 else 0.0
+
+                event = {
+                    "type": "meter_event",
+                    "meter_id": meter_id,
+                    "substation_id": substation_id,
+                    "energy_kwh": energy,
+                    "is_anomaly": is_anomaly,
+                    "z_score": z_score,
+                    "event_ts": datetime.utcnow().isoformat(),
+                    "source": "simulation",
+                }
+                yield f"data: {json.dumps(event)}\n\n"
+
+                # Also broadcast to any SSE subscribers for this substation
+                _broadcast(substation_id, event)
+
+                await asyncio.sleep(interval_s)
+
+        except asyncio.CancelledError:
+            pass
+
+    return StreamingResponse(
+        simulation_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )

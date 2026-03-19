@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { api, ghiApi, UploadResult } from '@/lib/api'
+import { useAppStore } from '@/store/useAppStore'
 
 type Stage = 'idle' | 'auth' | 'uploading' | 'done' | 'error'
 
@@ -22,6 +23,8 @@ export default function UploadPage() {
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const { setActiveSession, updateSessionDetail, updateSessionAI } = useAppStore()
 
   useEffect(() => {
     const token = localStorage.getItem('urjarakshak_token')
@@ -89,15 +92,42 @@ export default function UploadPage() {
       const res = await api.uploadMeterData(file, substationId.trim())
       setResult(res)
       setStage('done')
-      // Auto-fetch AI interpretation if analysis was created
+
+      // Populate global SSOT store with this analysis session
       if (res.analysis_id) {
+        const session = {
+          analysisId: res.analysis_id,
+          batchId: res.batch_id,
+          substationId: res.substation_id,
+          filename: res.filename,
+          rowsParsed: res.rows_parsed,
+          stats: res.summary,
+          anomalySample: res.anomaly_sample,
+          createdAt: new Date().toISOString(),
+          detail: null,
+          aiInterpretation: null,
+          aiStatus: 'idle' as const,
+          aiError: null,
+        }
+        setActiveSession(session)
+
+        // Fetch full analysis detail in background
+        api.getAnalysis(res.analysis_id).then((detail) => {
+          updateSessionDetail(res.analysis_id!, detail)
+        }).catch(() => {})
+
+        // Auto-fetch AI interpretation
         setAiLoading(true)
+        updateSessionAI(res.analysis_id, null, 'loading')
         try {
           const ai = await ghiApi.interpret(res.analysis_id)
           setAiResult(ai)
+          updateSessionAI(res.analysis_id, ai, 'ready')
         } catch (err: any) {
           console.warn('AI interpretation unavailable:', err?.message)
-          setAiError('AI analysis unavailable — the backend may not have an AI provider configured.')
+          const errMsg = 'AI analysis unavailable — the backend may not have an AI provider configured.'
+          setAiError(errMsg)
+          updateSessionAI(res.analysis_id, null, 'error', errMsg)
         } finally {
           setAiLoading(false)
         }

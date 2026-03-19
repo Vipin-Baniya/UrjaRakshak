@@ -118,7 +118,7 @@ class Settings(BaseSettings):
     @field_validator("ENVIRONMENT")
     @classmethod
     def validate_environment(cls, v: str) -> str:
-        allowed = {"development", "staging", "production"}
+        allowed = {"development", "staging", "production", "test"}
         if v not in allowed:
             raise ValueError(f"ENVIRONMENT must be one of {sorted(allowed)}")
         return v
@@ -137,11 +137,15 @@ class Settings(BaseSettings):
             "postgresql://",
             "postgresql+asyncpg://",
             "postgres://",
+            # Allow SQLite for testing and local development
+            "sqlite://",
+            "sqlite+aiosqlite://",
         )
         if not any(v.startswith(p) for p in ok_prefixes):
             raise ValueError(
                 "DATABASE_URL must be a PostgreSQL connection string "
-                "(postgresql:// or postgresql+asyncpg://)"
+                "(postgresql:// or postgresql+asyncpg://) or SQLite for testing "
+                "(sqlite:// or sqlite+aiosqlite://)"
             )
         return v
 
