@@ -69,6 +69,38 @@ interface Particle {
   speed: number
 }
 
+/** Derive flow nodes from real session data when available */
+function buildSessionNodes(
+  substationId: string,
+  totalKwh: number,
+  residualPct: number,
+): { nodes: FlowNode[]; edges: FlowEdge[] } {
+  const totalMw = Math.round(totalKwh / 1000)
+  const lossMw   = Math.round(totalMw * (residualPct / 100))
+  const outputMw = totalMw - lossMw
+
+  const nodes: FlowNode[] = [
+    { id: 'gen1',  label: 'Grid Input',    type: 'generation',   value: totalMw,             unit: 'MW', x: 60,  y: 120 },
+    { id: 'tr1',   label: substationId,    type: 'transmission', value: Math.round(totalMw * 0.95), unit: 'MW', x: 280, y: 100 },
+    { id: 'tr2',   label: 'Sub-feed B',    type: 'transmission', value: Math.round(totalMw * 0.05), unit: 'MW', x: 280, y: 280 },
+    { id: 'dist1', label: 'Distribution A',type: 'distribution', value: Math.round(outputMw * 0.55), unit: 'MW', x: 500, y: 80  },
+    { id: 'dist2', label: 'Distribution B',type: 'distribution', value: Math.round(outputMw * 0.45), unit: 'MW', x: 500, y: 260 },
+    { id: 'cons1', label: 'Load',          type: 'consumer',     value: outputMw,            unit: 'MW', x: 700, y: 170 },
+  ]
+
+  const edges: FlowEdge[] = [
+    { from: 'gen1',  to: 'tr1',   power: Math.round(totalMw * 0.95), loss: lossMw },
+    { from: 'gen1',  to: 'tr2',   power: Math.round(totalMw * 0.05), loss: 0 },
+    { from: 'tr1',   to: 'dist1', power: Math.round(outputMw * 0.55), loss: 0 },
+    { from: 'tr1',   to: 'dist2', power: Math.round(outputMw * 0.45 * 0.6), loss: 0 },
+    { from: 'tr2',   to: 'dist2', power: Math.round(outputMw * 0.45 * 0.4), loss: 0 },
+    { from: 'dist1', to: 'cons1', power: Math.round(outputMw * 0.55), loss: 0 },
+    { from: 'dist2', to: 'cons1', power: Math.round(outputMw * 0.45), loss: 0 },
+  ]
+
+  return { nodes, edges }
+}
+
 export function PowerFlowAnimation() {
   const svgRef = useRef<SVGSVGElement>(null)
   const [particles, setParticles] = useState<Particle[]>([])
@@ -77,9 +109,26 @@ export function PowerFlowAnimation() {
   const particlesRef = useRef<Particle[]>([])
   const nextIdRef = useRef(0)
 
+  // Read live session data from global SSOT store
+  const activeSession = (require('@/store/useAppStore') as any).useAppStore(
+    (s: any) => s.activeSession,
+  )
+
+  const { nodes: NODES, edges: EDGES } = activeSession
+    ? buildSessionNodes(
+        activeSession.substationId,
+        activeSession.stats.total_energy_kwh,
+        activeSession.stats.residual_pct,
+      )
+    : { nodes: DEFAULT_NODES, edges: DEFAULT_EDGES }
+
+  const headerLabel = activeSession
+    ? `⚡ Power Flow — ${activeSession.substationId} (${activeSession.filename})`
+    : '⚡ Live Power Flow — National Grid (sample)'
+
   useEffect(() => {
     // Initialise particles per edge
-    const initial: Particle[] = DEFAULT_EDGES.flatMap((_, i) => [
+    const initial: Particle[] = EDGES.flatMap((_, i) => [
       { id: nextIdRef.current++, edgeIdx: i, progress: 0,   speed: 0.003 + Math.random() * 0.003 },
       { id: nextIdRef.current++, edgeIdx: i, progress: 0.33, speed: 0.003 + Math.random() * 0.003 },
       { id: nextIdRef.current++, edgeIdx: i, progress: 0.66, speed: 0.003 + Math.random() * 0.003 },
@@ -99,15 +148,17 @@ export function PowerFlowAnimation() {
     }
     animRef.current = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(animRef.current)
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSession?.analysisId])
 
-  const nodeMap = new Map(DEFAULT_NODES.map(n => [n.id, n]))
+  const nodeMap = new Map(NODES.map(n => [n.id, n]))
 
   function edgePoints(edge: FlowEdge) {
     const from = nodeMap.get(edge.from)
     const to   = nodeMap.get(edge.to)
     if (!from || !to) return null
     return { x1: from.x + 60, y1: from.y + 22, x2: to.x, y2: to.y + 22 }
+
   }
 
   function particlePos(p: Particle) {

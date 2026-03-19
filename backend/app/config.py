@@ -65,11 +65,15 @@ class Settings(BaseSettings):
             "http://localhost:3001",
         ]
     )
-    CORS_ALLOW_ORIGIN_REGEX: Optional[str] = Field(default=None)
+    # Allow all Vercel preview deployments and any localhost port by default
+    CORS_ALLOW_ORIGIN_REGEX: Optional[str] = Field(
+        default=r"https://urjarakshak.*\.vercel\.app|http://localhost:\d+"
+    )
 
     # ── AI Services ──────────────────────────────────────────────────────
     ANTHROPIC_API_KEY: Optional[str] = Field(default=None)
     OPENAI_API_KEY:    Optional[str] = Field(default=None)
+    GROQ_API_KEY:      Optional[str] = Field(default=None)
     HUGGINGFACE_TOKEN: Optional[str] = Field(default=None)
     AI_MODEL: str = Field(default="claude-haiku-4-5-20251001")
 

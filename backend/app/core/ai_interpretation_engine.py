@@ -182,18 +182,25 @@ class AIInterpretationEngine:
 
     MIN_CONFIDENCE_THRESHOLD = 0.5  # refuse interpretation below this
 
-    def __init__(self, anthropic_key: Optional[str] = None, openai_key: Optional[str] = None):
+    def __init__(
+        self,
+        anthropic_key: Optional[str] = None,
+        openai_key: Optional[str] = None,
+        groq_key: Optional[str] = None,
+    ):
         self._anthropic_key = anthropic_key
         self._openai_key    = openai_key
+        self._groq_key      = groq_key
 
     @property
     def is_configured(self) -> bool:
-        return bool(self._anthropic_key or self._openai_key)
+        return bool(self._groq_key or self._anthropic_key or self._openai_key)
 
     @property
     def preferred_provider(self) -> str:
+        if self._groq_key:      return "groq"       # free-tier LLaMA — primary
         if self._anthropic_key: return "anthropic"
-        if self._openai_key:    return "openai"
+        if self._openai_key:    return "openai"      # kept for extreme rare cases
         return "none"
 
     def interpret(self, inp: AIInterpretationInput) -> AIInterpretationResult:
@@ -216,17 +223,24 @@ class AIInterpretationEngine:
         if not self.is_configured:
             return self._offline_result(inp, prompt_hash)
 
-        # Try preferred provider, fallback to other
-        try:
-            if self.preferred_provider == "anthropic":
-                return self._call_anthropic(prompt, prompt_hash, inp)
-            else:
-                return self._call_openai(prompt, prompt_hash, inp)
-        except Exception as e:
-            logger.warning("AI interpretation failed: %s — returning offline result", e)
-            result = self._offline_result(inp, prompt_hash)
-            result.error = f"API call failed: {str(e)[:200]}"
-            return result
+        # Try preferred provider, fallback chain: groq → anthropic → openai → offline
+        providers = []
+        if self._groq_key:      providers.append(("groq",      self._call_groq))
+        if self._anthropic_key: providers.append(("anthropic", self._call_anthropic))
+        if self._openai_key:    providers.append(("openai",    self._call_openai))
+
+        last_err: Optional[Exception] = None
+        for name, caller in providers:
+            try:
+                return caller(prompt, prompt_hash, inp)
+            except Exception as e:
+                logger.warning("AI provider %s failed: %s — trying next", name, e)
+                last_err = e
+
+        logger.warning("All AI providers failed — returning offline result")
+        result = self._offline_result(inp, prompt_hash)
+        result.error = f"All providers failed: {str(last_err)[:200]}"
+        return result
 
     # ── Prompt builder ────────────────────────────────────────────────────
 
@@ -317,6 +331,33 @@ class AIInterpretationEngine:
             **parsed,
             model_name="gpt-4o-mini",
             model_version="2024",
+            prompt_hash=prompt_hash,
+            token_usage=tokens,
+            raw_response=raw,
+        )
+
+    def _call_groq(
+        self, prompt: str, prompt_hash: str, inp: AIInterpretationInput
+    ) -> AIInterpretationResult:
+        """Call Groq free-tier LLaMA model for interpretation."""
+        from groq import Groq
+        client = Groq(api_key=self._groq_key)
+        response = client.chat.completions.create(
+            model="llama3-70b-8192",
+            temperature=0.2,
+            max_tokens=800,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+        )
+        raw = response.choices[0].message.content or ""
+        tokens = response.usage.total_tokens if response.usage else 0
+        parsed = self._parse_and_validate(raw)
+        return AIInterpretationResult(
+            **parsed,
+            model_name="llama3-70b",
+            model_version="groq",
             prompt_hash=prompt_hash,
             token_usage=tokens,
             raw_response=raw,
@@ -564,6 +605,7 @@ class AIInterpretationEngine:
         Conversational AI response. Returns {answer, model, error}.
         Uses CHAT_SYSTEM_PROMPT for free-form responses (not bounded JSON schema).
         Falls back to a physics-based offline answer when no API key is configured.
+        Provider priority: groq (free) → anthropic → openai (rare fallback) → offline.
         """
         if not self.is_configured:
             return {
@@ -576,21 +618,25 @@ class AIInterpretationEngine:
         if context:
             user_msg = f"Context:\n{context}\n\nQuestion: {question}"
 
-        try:
-            if self.preferred_provider == "openai":
-                return self._chat_openai(user_msg)
-            else:
-                return self._chat_anthropic(user_msg)
-        except Exception as e:
-            logger.warning("Chat call failed: %s", e)
-            return {
-                "answer": (
-                    f"I encountered an error reaching the AI service: {str(e)[:120]}. "
-                    "Please check that the API key is valid and the service is reachable."
-                ),
-                "model": self.preferred_provider,
-                "error": str(e)[:200],
-            }
+        # Build provider chain (groq first — free tier)
+        providers: list = []
+        if self._groq_key:      providers.append(("groq",      lambda m: self._chat_groq(m)))
+        if self._anthropic_key: providers.append(("anthropic", lambda m: self._chat_anthropic(m)))
+        if self._openai_key:    providers.append(("openai",    lambda m: self._chat_openai(m)))
+
+        last_err: Optional[Exception] = None
+        for name, caller in providers:
+            try:
+                return caller(user_msg)
+            except Exception as e:
+                logger.warning("Chat provider %s failed: %s", name, e)
+                last_err = e
+
+        return {
+            "answer": self._offline_chat_answer(question, context),
+            "model": "offline",
+            "error": str(last_err)[:200] if last_err else None,
+        }
 
     @staticmethod
     def _offline_chat_answer(question: str, context: Optional[str]) -> str:
@@ -773,6 +819,25 @@ class AIInterpretationEngine:
             "error": None,
         }
 
+    def _chat_groq(self, user_msg: str) -> Dict[str, Any]:
+        """Chat via Groq free-tier LLaMA — primary provider."""
+        from groq import Groq
+        client = Groq(api_key=self._groq_key)
+        response = client.chat.completions.create(
+            model="llama3-70b-8192",
+            temperature=0.4,
+            max_tokens=500,
+            messages=[
+                {"role": "system", "content": CHAT_SYSTEM_PROMPT},
+                {"role": "user", "content": user_msg},
+            ],
+        )
+        return {
+            "answer": response.choices[0].message.content or "No response.",
+            "model": "llama3-70b (groq)",
+            "error": None,
+        }
+
 
 # ── Conversational chat prompt ────────────────────────────────────────────
 
@@ -799,7 +864,7 @@ def get_ai_engine() -> AIInterpretationEngine:
     return _ai_engine
 
 
-def init_ai_engine(anthropic_key: Optional[str], openai_key: Optional[str]) -> AIInterpretationEngine:
+def init_ai_engine(anthropic_key: Optional[str], openai_key: Optional[str], groq_key: Optional[str] = None) -> AIInterpretationEngine:
     global _ai_engine
-    _ai_engine = AIInterpretationEngine(anthropic_key=anthropic_key, openai_key=openai_key)
+    _ai_engine = AIInterpretationEngine(anthropic_key=anthropic_key, openai_key=openai_key, groq_key=groq_key)
     return _ai_engine

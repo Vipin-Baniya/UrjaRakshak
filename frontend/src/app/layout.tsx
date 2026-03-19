@@ -3,6 +3,7 @@ import './globals.css'
 import { CommandBar } from '@/components/ui/CommandBar'
 import { Footer } from '@/components/ui/Footer'
 import { PlatformDetect } from '@/components/ui/PlatformDetect'
+import { ThemeProvider } from '@/components/ui/ThemeProvider'
 
 export const metadata: Metadata = {
   title: 'UrjaRakshak — Physics-Based Grid Intelligence',
@@ -30,14 +31,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <PlatformDetect />
-        <div className="app-shell">
-          <CommandBar />
-          <main className="app-main">
-            {children}
-          </main>
-          <Footer />
-        </div>
+        <ThemeProvider>
+          <PlatformDetect />
+          <div className="app-shell">
+            <CommandBar />
+            <main className="app-main">
+              {children}
+            </main>
+            <Footer />
+          </div>
+        </ThemeProvider>
       </body>
     </html>
   )

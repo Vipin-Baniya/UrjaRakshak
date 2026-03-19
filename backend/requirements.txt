@@ -35,7 +35,8 @@ python-dotenv==1.0.0
 
 # ── Optional AI ───────────────────────────────────────────────────────
 # anthropic==0.18.0           # uncomment to use Claude
-openai==1.35.0                 # GPT-4o-mini for AI interpretation
+openai==1.35.0                 # GPT-4o-mini for AI interpretation (fallback)
+groq==0.9.0                    # Groq free-tier LLaMA — primary AI provider
 
 # ── Testing ───────────────────────────────────────────────────────────
 pytest==7.4.3
