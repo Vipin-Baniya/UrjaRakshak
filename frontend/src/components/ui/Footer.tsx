@@ -1,15 +1,12 @@
 'use client'
 
+import { UrjaRakshakLogo } from '@/components/ui/UrjaRakshakLogo'
+
 export function Footer() {
   return (
     <footer className="footer">
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{
-          width: 22, height: 22, borderRadius: '50%',
-          background: 'linear-gradient(145deg, var(--cyan), var(--blue))',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 11,
-        }}>⚡</div>
+        <UrjaRakshakLogo size={22} />
         <span className="footer-text">
           UrjaRakshak v2.3 — Physics-Based Grid Intelligence
         </span>
