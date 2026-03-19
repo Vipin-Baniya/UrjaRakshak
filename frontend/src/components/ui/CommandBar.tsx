@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { ThemeToggle } from '@/components/ui/ThemeToggle'
+import { UrjaRakshakLogo } from '@/components/ui/UrjaRakshakLogo'
 
 export function CommandBar() {
   const pathname = usePathname()
@@ -46,7 +48,9 @@ export function CommandBar() {
     <>
       <header className="nav-bar">
         <Link href="/" className="nav-brand">
-          <div className="nav-brand-mark">⚡</div>
+          <div className="nav-brand-mark">
+            <UrjaRakshakLogo size={26} />
+          </div>
           <div className="nav-brand-text">
             <span className="nav-brand-name">UrjaRakshak</span>
             <span className="nav-brand-sub">Grid Intelligence</span>
@@ -69,6 +73,8 @@ export function CommandBar() {
         </nav>
 
         <div className="nav-end">
+          <ThemeToggle compact />
+
           <div className={`live-pill ${liveState} nav-status`}>
             <span className="live-dot" />
             {liveLabel}
@@ -99,11 +105,12 @@ export function CommandBar() {
           </Link>
         ))}
         <div className="nav-drawer-sep" />
-        <div className="nav-drawer-meta">
+        <div className="nav-drawer-meta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div className={`live-pill ${liveState}`}>
             <span className="live-dot" />
             Backend {liveLabel}
           </div>
+          <ThemeToggle />
         </div>
       </div>
 

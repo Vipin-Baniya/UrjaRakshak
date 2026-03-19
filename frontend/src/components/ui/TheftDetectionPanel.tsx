@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useAppStore } from '@/store/useAppStore'
 
 interface SuspiciousMeter {
   id: string
@@ -46,6 +47,48 @@ const MOCK_METERS: SuspiciousMeter[] = [
     action: 'Review night-time meter logs',
   },
 ]
+
+/** Max theft probability cap */
+const THEFT_PROB_MAX = 98
+/** Z-score to probability weight (each σ adds this much probability) */
+const Z_SCORE_WEIGHT = 15
+/** Z-score contribution cap before deviation adds its share */
+const Z_SCORE_CAP = 60
+/** Deviation threshold above which full deviation bonus applies */
+const DEVIATION_BONUS_THRESHOLD = 30
+
+/** Build theft suspects from real anomaly sample */
+function buildMetersFromSession(session: ReturnType<typeof useAppStore.getState>['activeSession']): SuspiciousMeter[] {
+  if (!session?.anomalySample?.length) return []
+  return session.anomalySample
+    .slice(0, 5)
+    .map(a => {
+      const zAbs = Math.abs(a.z_score ?? 0)
+      const deviation = a.expected_kwh > 0
+        ? ((a.energy_kwh - a.expected_kwh) / a.expected_kwh) * 100
+        : 0
+      const theftProb = Math.min(THEFT_PROB_MAX, Math.round(
+        Math.min(zAbs * Z_SCORE_WEIGHT, Z_SCORE_CAP) +
+        (Math.abs(deviation) > DEVIATION_BONUS_THRESHOLD ? DEVIATION_BONUS_THRESHOLD : Math.abs(deviation))
+      ))
+      const action = theftProb >= 80
+        ? 'Dispatch field inspector immediately'
+        : theftProb >= 60
+        ? 'Schedule meter audit within 48 hours'
+        : 'Review meter logs and 30-day baseline'
+      return {
+        id: a.meter_id,
+        sector: session.substationId,
+        theftProbability: theftProb,
+        consumption: +a.energy_kwh.toFixed(2),
+        expected: +a.expected_kwh.toFixed(2),
+        deviation: +deviation.toFixed(1),
+        reason: `${a.reason}. Z-score: ${a.z_score?.toFixed(2) ?? 'N/A'}. Isolation Forest anomaly detected.`,
+        action,
+      } satisfies SuspiciousMeter
+    })
+    .sort((a, b) => b.theftProbability - a.theftProbability)
+}
 
 function ProbabilityGauge({ value, size = 120 }: { value: number; size?: number }) {
   const radius = (size - 20) / 2
@@ -190,23 +233,42 @@ function MeterRow({ meter, isSelected, onClick }: { meter: SuspiciousMeter; isSe
 }
 
 export function TheftDetectionPanel() {
-  const [selectedMeter, setSelectedMeter] = useState<string | null>(MOCK_METERS[0].id)
+  const activeSession = useAppStore(s => s.activeSession)
+  const realMeters = useMemo(() => buildMetersFromSession(activeSession), [activeSession])
+  const meters = realMeters.length > 0 ? realMeters : MOCK_METERS
+  const isRealData = realMeters.length > 0
+
+  const [selectedMeter, setSelectedMeter] = useState<string | null>(meters[0]?.id ?? null)
   const [scanActive, setScanActive] = useState(false)
   const [scanProgress, setScanProgress] = useState(0)
   const [scanResults, setScanResults] = useState<string[]>([])
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const SCAN_LINES = [
-    'Initialising anomaly detection engine…',
-    'Loading 30-day baseline per meter…',
-    'Running Isolation Forest (n_estimators=200)…',
-    'Computing Z-scores across fleet…',
-    'Applying physics gate: First-Law check…',
-    'Cross-validating 3 detection methods…',
-    'Ranking meters by theft probability…',
-    'Generating explainability report…',
-    'Scan complete — 3 suspicious meters found.',
-  ]
+  // Reset selection when meters change
+  useEffect(() => { setSelectedMeter(meters[0]?.id ?? null) }, [meters])
+
+  const SCAN_LINES = isRealData
+    ? [
+        `Loading ${activeSession?.rowsParsed} meter readings from ${activeSession?.substationId}…`,
+        'Running Isolation Forest on uploaded batch…',
+        'Computing Z-scores per meter…',
+        'Applying physics gate: First-Law check…',
+        'Cross-validating 3 detection methods…',
+        'Ranking meters by theft probability…',
+        'Generating explainability report…',
+        `Scan complete — ${meters.length} suspicious meter${meters.length !== 1 ? 's' : ''} found.`,
+      ]
+    : [
+        'Initialising anomaly detection engine…',
+        'Loading 30-day baseline per meter…',
+        'Running Isolation Forest (n_estimators=200)…',
+        'Computing Z-scores across fleet…',
+        'Applying physics gate: First-Law check…',
+        'Cross-validating 3 detection methods…',
+        'Ranking meters by theft probability…',
+        'Generating explainability report…',
+        'Scan complete — 3 suspicious meters found.',
+      ]
 
   function startScan() {
     setScanActive(true)
@@ -228,9 +290,9 @@ export function TheftDetectionPanel() {
 
   useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current) }, [])
 
-  const topMeter = MOCK_METERS.find(m => m.id === selectedMeter) ?? MOCK_METERS[0]
-  const totalSuspect = MOCK_METERS.length
-  const criticalCount = MOCK_METERS.filter(m => m.theftProbability >= 80).length
+  const topMeter = meters.find(m => m.id === selectedMeter) ?? meters[0]
+  const totalSuspect = meters.length
+  const criticalCount = meters.filter(m => m.theftProbability >= 80).length
 
   return (
     <div>
@@ -243,6 +305,11 @@ export function TheftDetectionPanel() {
           </h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 6, lineHeight: 1.6 }}>
             3-gate detection: Isolation Forest + Z-Score + Physics validation. All three must agree before flagging.
+            {isRealData && (
+              <span style={{ marginLeft: 8, color: 'var(--green)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>
+                ● Live data · {activeSession?.substationId}
+              </span>
+            )}
           </p>
         </div>
         <button className="btn btn-secondary btn-sm" onClick={startScan} disabled={scanActive}>
@@ -288,31 +355,33 @@ export function TheftDetectionPanel() {
       </AnimatePresence>
 
       {/* KPI row */}
-      <div className="grid-3" style={{ marginBottom: 20 }}>
-        <div className="panel" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <ProbabilityGauge value={topMeter.theftProbability} size={88} />
-          <div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Top Risk</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>{topMeter.id}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{topMeter.sector}</div>
+      {topMeter && (
+        <div className="grid-3" style={{ marginBottom: 20 }}>
+          <div className="panel" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <ProbabilityGauge value={topMeter.theftProbability} size={88} />
+            <div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Top Risk</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>{topMeter.id}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{topMeter.sector}</div>
+            </div>
+          </div>
+          <div className="panel" style={{ textAlign: 'center' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 36, fontWeight: 300, color: 'var(--amber)', lineHeight: 1 }}>{totalSuspect}</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 6 }}>Suspicious Meters</div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>{isRealData ? `from ${activeSession?.substationId}` : 'across 3 sectors'}</div>
+          </div>
+          <div className="panel" style={{ textAlign: 'center' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 36, fontWeight: 300, color: 'var(--red)', lineHeight: 1 }}>{criticalCount}</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 6 }}>Critical — High Risk</div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>immediate action needed</div>
           </div>
         </div>
-        <div className="panel" style={{ textAlign: 'center' }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 36, fontWeight: 300, color: 'var(--amber)', lineHeight: 1 }}>{totalSuspect}</div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 6 }}>Suspicious Meters</div>
-          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>across 3 sectors</div>
-        </div>
-        <div className="panel" style={{ textAlign: 'center' }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 36, fontWeight: 300, color: 'var(--red)', lineHeight: 1 }}>{criticalCount}</div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 6 }}>Critical — High Risk</div>
-          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>immediate action needed</div>
-        </div>
-      </div>
+      )}
 
       {/* Meter list */}
       <div className="sec-label" style={{ marginBottom: 12 }}>Suspicious Meters — Ranked by Risk</div>
       <div>
-        {MOCK_METERS.map(meter => (
+        {meters.map(meter => (
           <MeterRow
             key={meter.id}
             meter={meter}

@@ -18,10 +18,23 @@ export const viewport: Viewport = {
   themeColor: '#01030A',
 }
 
+/** Inline script to apply theme before first paint — prevents flash */
+const themeScript = `
+  (function() {
+    try {
+      var t = localStorage.getItem('urjarakshak_theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+    } catch(e) {}
+  })();
+`
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
+        {/* Theme init: runs before hydration to prevent flash */}
+        {/* eslint-disable-next-line react/no-danger */}
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
