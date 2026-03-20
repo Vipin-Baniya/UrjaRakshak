@@ -148,6 +148,7 @@ function buildNodesFromSession(session: ReturnType<typeof useAppStore.getState>[
     { from: 'tr1',   to: 'dist2', power: Math.round(lossMwh), loss: Math.round(lossMwh * 0.5) },
     { from: 'dist1', to: 'cons1', power: Math.round(outputMwh) },
     { from: 'dist2', to: 'cons2', power: Math.round(lossMwh) },
+    { from: 'tr1',   to: 'info1', power: 0 },
   ]
 
   return { nodes, edges }
@@ -274,7 +275,7 @@ export function PowerFlowAnimation() {
 
       {/* SVG canvas */}
       <div style={{ position: 'relative', width: '100%', overflowX: 'auto', overflowY: 'hidden' }} tabIndex={0} role="img" aria-label="Power flow diagram">
-        <svg ref={svgRef} viewBox="0 0 800 440" style={{ width: `${100 * zoom}%`, minWidth: 600 * zoom, height: 'auto', display: 'block' }}>
+        <svg ref={svgRef} viewBox="0 0 860 440" style={{ width: `${100 * zoom}%`, minWidth: 600 * zoom, height: 'auto', display: 'block' }}>
           <defs>
             {edges.map((edge, i) => {
               const fromNode = nodeMap.get(edge.from)
@@ -293,7 +294,7 @@ export function PowerFlowAnimation() {
           <pattern id="pf-grid" width="40" height="40" patternUnits="userSpaceOnUse">
             <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(0,212,255,0.03)" strokeWidth="1" />
           </pattern>
-          <rect width="800" height="440" fill="url(#pf-grid)" />
+          <rect width="860" height="440" fill="url(#pf-grid)" />
 
           {/* Edges */}
           {edges.map((edge, i) => {
