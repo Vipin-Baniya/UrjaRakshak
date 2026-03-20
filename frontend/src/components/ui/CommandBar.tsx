@@ -30,9 +30,9 @@ export function CommandBar() {
   const nav = [
     { href: '/',            label: 'Home' },
     { href: '/dashboard',   label: 'Dashboard' },
-    { href: '/simulation',  label: '⚡ Simulation' },
-    { href: '/guide',       label: '📋 How to Use' },
-    { href: '/anomaly',     label: '🔎 Anomaly' },
+    { href: '/simulation',  label: 'Simulation' },
+    { href: '/guide',       label: 'How to Use' },
+    { href: '/anomaly',     label: 'Anomaly' },
     { href: '/grid',        label: 'Grid Map' },
     { href: '/upload',      label: 'Upload' },
     { href: '/analysis',    label: 'Analysis' },
