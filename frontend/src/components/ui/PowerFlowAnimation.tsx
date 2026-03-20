@@ -153,6 +153,10 @@ function buildNodesFromSession(session: ReturnType<typeof useAppStore.getState>[
   return { nodes, edges }
 }
 
+const MIN_ZOOM = 0.5
+const MAX_ZOOM = 2.5
+const ZOOM_STEP = 0.25
+
 export function PowerFlowAnimation() {
   const svgRef = useRef<SVGSVGElement>(null)
   const [particles, setParticles] = useState<Particle[]>([])
@@ -161,6 +165,7 @@ export function PowerFlowAnimation() {
   const particlesRef = useRef<Particle[]>([])
   const nextIdRef = useRef(0)
   const [dashboardData, setDashboardData] = useState<any>(null)
+  const [zoom, setZoom] = useState<number>(1)
 
   const activeSession = useAppStore(s => s.activeSession)
 
@@ -236,7 +241,7 @@ export function PowerFlowAnimation() {
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--cyan)' }}>
           ⚡ {isRealData ? `Live Power Flow — ${activeSession?.substationId ?? 'Uploaded Data'}` : 'Power Flow — Demo Data'}
         </div>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
           {isRealData && (
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--green)', border: '1px solid rgba(5,232,154,0.3)', borderRadius: 4, padding: '2px 7px' }}>
               ● Real Data
@@ -248,12 +253,28 @@ export function PowerFlowAnimation() {
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-tertiary)', textTransform: 'capitalize' }}>{t}</span>
             </div>
           ))}
+          {/* Zoom controls */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, borderLeft: '1px solid var(--border-subtle)', paddingLeft: 12 }}>
+            <button
+              onClick={() => setZoom(z => Math.max(MIN_ZOOM, +(z - ZOOM_STEP).toFixed(2)))}
+              disabled={zoom <= MIN_ZOOM}
+              title="Zoom out"
+              style={{ width: 22, height: 22, borderRadius: 4, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', cursor: zoom <= MIN_ZOOM ? 'not-allowed' : 'pointer', fontSize: 14, lineHeight: 1, opacity: zoom <= MIN_ZOOM ? 0.4 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >−</button>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-tertiary)', minWidth: 32, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
+            <button
+              onClick={() => setZoom(z => Math.min(MAX_ZOOM, +(z + ZOOM_STEP).toFixed(2)))}
+              disabled={zoom >= MAX_ZOOM}
+              title="Zoom in"
+              style={{ width: 22, height: 22, borderRadius: 4, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', cursor: zoom >= MAX_ZOOM ? 'not-allowed' : 'pointer', fontSize: 14, lineHeight: 1, opacity: zoom >= MAX_ZOOM ? 0.4 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >+</button>
+          </div>
         </div>
       </div>
 
       {/* SVG canvas */}
-      <div style={{ position: 'relative', width: '100%', overflowX: 'auto' }}>
-        <svg ref={svgRef} viewBox="0 0 800 440" style={{ width: '100%', minWidth: 600, height: 'auto', display: 'block' }}>
+      <div style={{ position: 'relative', width: '100%', overflowX: 'auto', overflowY: 'hidden' }} tabIndex={0} role="img" aria-label="Power flow diagram">
+        <svg ref={svgRef} viewBox="0 0 800 440" style={{ width: `${100 * zoom}%`, minWidth: 600 * zoom, height: 'auto', display: 'block' }}>
           <defs>
             {edges.map((edge, i) => {
               const fromNode = nodeMap.get(edge.from)
