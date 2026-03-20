@@ -394,10 +394,14 @@ export default function LoginPage() {
       router.push('/upload')
       return
     }
-    // Parse ?next= query param
+    // Parse ?next= and ?tab= query params
     const params = new URLSearchParams(window.location.search)
     const next = params.get('next')
     if (next) setRedirectTo(next)
+    const tabParam = params.get('tab') as Tab | null
+    if (tabParam && ['login', 'register', 'forgot'].includes(tabParam)) {
+      setTab(tabParam)
+    }
   }, [router])
 
   function handleSuccess() {

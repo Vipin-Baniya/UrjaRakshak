@@ -44,15 +44,16 @@ async def ai_engine_status(
         "configured":        engine.is_configured,
         "preferred_provider": engine.preferred_provider,
         "min_confidence_threshold": engine.MIN_CONFIDENCE_THRESHOLD,
-        "supported_providers": ["anthropic", "openai"],
+        "supported_providers": ["anthropic", "groq", "openai"],
         "models": {
             "anthropic": "claude-haiku-4-5-20251001",
+            "groq":      "llama3-8b-8192",
             "openai":    "gpt-4o-mini",
         },
         "offline_mode": not engine.is_configured,
         "offline_note": (
             None if engine.is_configured
-            else "Set ANTHROPIC_API_KEY or OPENAI_API_KEY env var to enable live AI interpretation."
+            else "Set ANTHROPIC_API_KEY, GROQ_API_KEY, or OPENAI_API_KEY env var to enable live AI interpretation."
         ),
     }
 
