@@ -222,6 +222,8 @@ export default function AnalysisPage() {
               <button
                 type="button"
                 onClick={() => setShowRecovery(v => !v)}
+                aria-expanded={showRecovery}
+                aria-controls="recovery-section"
                 style={{
                   background: 'none', border: 'none', cursor: 'pointer',
                   fontSize: 12, color: 'var(--cyan)', padding: 0, marginBottom: showRecovery ? 10 : 0,
@@ -231,7 +233,7 @@ export default function AnalysisPage() {
                 {showRecovery ? '▾ Hide' : '▸ Add'} password recovery (security question)
               </button>
               {showRecovery && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '10px 12px', background: 'rgba(0,212,255,0.04)', borderRadius: 'var(--r-sm)', border: '1px solid rgba(0,212,255,0.12)' }}>
+                <div id="recovery-section" style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '10px 12px', background: 'rgba(0,212,255,0.04)', borderRadius: 'var(--r-sm)', border: '1px solid rgba(0,212,255,0.12)' }}>
                   <div>
                     <label className="metric-label" style={{ marginBottom: 4 }}>Security Question</label>
                     <select
