@@ -70,6 +70,7 @@ class Settings(BaseSettings):
     # ── AI Services ──────────────────────────────────────────────────────
     ANTHROPIC_API_KEY: Optional[str] = Field(default=None)
     OPENAI_API_KEY:    Optional[str] = Field(default=None)
+    GROQ_API_KEY:      Optional[str] = Field(default=None)
     HUGGINGFACE_TOKEN: Optional[str] = Field(default=None)
     AI_MODEL: str = Field(default="claude-haiku-4-5-20251001")
 

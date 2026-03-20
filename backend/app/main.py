@@ -108,7 +108,8 @@ async def lifespan(app: FastAPI):
     try:
         ai_eng = init_ai_engine(
             anthropic_key=settings.ANTHROPIC_API_KEY,
-            openai_key=settings.OPENAI_API_KEY
+            openai_key=settings.OPENAI_API_KEY,
+            groq_key=settings.GROQ_API_KEY,
         )
         logger.info(f"✅ AI engine configured: {ai_eng.is_configured}")
     except Exception as e:

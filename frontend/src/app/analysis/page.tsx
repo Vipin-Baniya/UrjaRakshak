@@ -20,6 +20,16 @@ const RISK_COLORS: Record<string, string> = {
   CRITICAL: 'var(--red)',
 }
 
+const SECURITY_QUESTIONS = [
+  "What is your mother's maiden name?",
+  "What was the name of your first pet?",
+  "What city were you born in?",
+  "What was the name of your primary school?",
+  "What is your oldest sibling's middle name?",
+  "What street did you grow up on?",
+  "What was your childhood nickname?",
+]
+
 export default function AnalysisPage() {
   const [analyses, setAnalyses]   = useState<any[]>([])
   const [total, setTotal]         = useState(0)
@@ -37,6 +47,11 @@ export default function AnalysisPage() {
   const [authPassword, setAuthPassword] = useState('')
   const [authLoading, setAuthLoading] = useState(false)
   const [authError, setAuthError]     = useState('')
+  const [authMode, setAuthMode]       = useState<'login' | 'register'>('login')
+  // Register extras (security question for password recovery)
+  const [showRecovery, setShowRecovery] = useState(false)
+  const [secQuestion, setSecQuestion] = useState(SECURITY_QUESTIONS[0])
+  const [secAnswer, setSecAnswer]     = useState('')
 
   const fetchAnalyses = useCallback(async () => {
     setLoading(true)
@@ -86,7 +101,10 @@ export default function AnalysisPage() {
     setAuthError('')
     setAuthLoading(true)
     try {
-      await api.register(authEmail, authPassword, 'analyst')
+      await api.register(authEmail, authPassword, 'analyst', {
+        security_question: showRecovery ? secQuestion : undefined,
+        security_answer: (showRecovery && secAnswer) ? secAnswer : undefined,
+      })
       const res = await api.login(authEmail, authPassword)
       localStorage.setItem('urjarakshak_token', res.access_token)
       localStorage.setItem('urjarakshak_role', res.role || 'analyst')
@@ -157,28 +175,112 @@ export default function AnalysisPage() {
 
       {/* Auth gate */}
       {fetchError === 'auth_required' && (
-        <div className="panel fade-in" style={{ marginBottom: 24, maxWidth: 440 }}>
+        <div className="panel fade-in" style={{ marginBottom: 24, maxWidth: 460 }}>
           <div className="sec-label accent">Authentication Required</div>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.6 }}>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.6 }}>
             Analysis history requires an analyst account. Register instantly.
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+
+          {/* Login / Register tabs */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: 'var(--bg-elevated)', borderRadius: 'var(--r-md)', padding: 4 }}>
+            {(['login', 'register'] as const).map(mode => (
+              <button
+                key={mode}
+                onClick={() => { setAuthMode(mode); setAuthError(''); setShowRecovery(false) }}
+                style={{
+                  flex: 1,
+                  padding: '6px 4px',
+                  borderRadius: 'var(--r-sm)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: authMode === mode ? 700 : 400,
+                  background: authMode === mode ? 'var(--cyan)' : 'transparent',
+                  color: authMode === mode ? '#000' : 'var(--text-secondary)',
+                  transition: 'background 0.18s, color 0.18s',
+                  fontFamily: 'var(--font-ui)',
+                  textTransform: 'capitalize',
+                }}
+              >
+                {mode === 'login' ? 'Sign In' : 'Register'}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 14 }}>
             <input className="input" type="email" placeholder="Email address"
               value={authEmail} onChange={e => setAuthEmail(e.target.value)} autoComplete="email" />
             <input className="input" type="password" placeholder="Password (min 8 chars)"
               value={authPassword} onChange={e => setAuthPassword(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleLogin()} autoComplete="current-password" />
+              onKeyDown={e => e.key === 'Enter' && (authMode === 'login' ? handleLogin() : handleRegister())}
+              autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} />
           </div>
-          {authError && <div className="alert alert-err" style={{ marginBottom: 14 }}>{authError}</div>}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={handleLogin} disabled={authLoading || !authEmail || !authPassword}
-              className="btn btn-primary" style={{ flex: 1 }}>
-              {authLoading ? 'Logging in…' : 'Login'}
-            </button>
-            <button onClick={handleRegister} disabled={authLoading || !authEmail || !authPassword}
-              className="btn btn-secondary" style={{ flex: 1 }}>
-              Register
-            </button>
+
+          {/* Security question section (register only) */}
+          {authMode === 'register' && (
+            <div style={{ marginBottom: 14 }}>
+              <button
+                type="button"
+                onClick={() => setShowRecovery(v => !v)}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: 12, color: 'var(--cyan)', padding: 0, marginBottom: showRecovery ? 10 : 0,
+                  fontFamily: 'var(--font-ui)',
+                }}
+              >
+                {showRecovery ? '▾ Hide' : '▸ Add'} password recovery (security question)
+              </button>
+              {showRecovery && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '10px 12px', background: 'rgba(0,212,255,0.04)', borderRadius: 'var(--r-sm)', border: '1px solid rgba(0,212,255,0.12)' }}>
+                  <div>
+                    <label className="metric-label" style={{ marginBottom: 4 }}>Security Question</label>
+                    <select
+                      className="input"
+                      value={secQuestion}
+                      onChange={e => setSecQuestion(e.target.value)}
+                      style={{ fontFamily: 'var(--font-ui)', color: 'var(--text-primary)' }}
+                    >
+                      {SECURITY_QUESTIONS.map(q => (
+                        <option key={q} value={q}>{q}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="metric-label" style={{ marginBottom: 4 }}>Security Answer</label>
+                    <input
+                      className="input"
+                      value={secAnswer}
+                      onChange={e => setSecAnswer(e.target.value)}
+                      placeholder="Your answer (case-insensitive)"
+                      autoComplete="off"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {authError && <div className="alert alert-err" style={{ marginBottom: 12 }}>{authError}</div>}
+
+          <button
+            onClick={authMode === 'login' ? handleLogin : handleRegister}
+            disabled={authLoading || !authEmail || !authPassword}
+            className="btn btn-primary"
+            style={{ width: '100%', marginBottom: 10 }}
+          >
+            {authLoading
+              ? (authMode === 'login' ? 'Signing in…' : 'Registering…')
+              : (authMode === 'login' ? 'Sign In' : 'Create Account')}
+          </button>
+
+          {/* Forgot password link */}
+          <div style={{ textAlign: 'center' }}>
+            <Link
+              href="/login?tab=forgot&next=/analysis"
+              style={{ fontSize: 12, color: 'var(--text-dim)', textDecoration: 'underline' }}
+            >
+              Forgot your password?
+            </Link>
           </div>
         </div>
       )}
@@ -193,7 +295,7 @@ export default function AnalysisPage() {
       {!fetchError && aiStatus && !aiStatus.configured && (
         <div className="alert alert-warn fade-in" style={{ marginBottom: 20 }}>
           <strong>AI running in offline mode.</strong>{' '}
-          Set <code>ANTHROPIC_API_KEY</code> or <code>OPENAI_API_KEY</code> on the backend to enable live LLM analysis.
+          Set <code>ANTHROPIC_API_KEY</code>, <code>GROQ_API_KEY</code>, or <code>OPENAI_API_KEY</code> on the backend to enable live LLM analysis.
           Offline mode produces deterministic physics-based risk assessments without an LLM call.
         </div>
       )}
