@@ -22,8 +22,8 @@
     "Docker"
   ],
   "demoUrl": "https://urjarakshak.vercel.app",
-  "demoVideoUrl": "",
-  "architectureImageUrl": "",
+  "demoVideoUrl": null,
+  "architectureImageUrl": null,
   "architectureDescription": "Frontend (Next.js 14) → FastAPI backend → PostgreSQL/Supabase\n\nData flow:\n1. CSV upload → per-meter Z-score anomaly detection → MeterReading table\n2. Physics validation → I²R losses + transformer losses → residual = actual − expected\n3. GHI engine → PBS·0.35 + ASS·0.20 + CS·0.15 + TSS·0.15 + DIS·0.15 → score 0–100\n4. Risk classifier → inspection ticket auto-created if residual > 8% or GHI < 50\n5. AI interpretation (optional) → Claude / OpenAI generates structured narrative\n6. Drift detection → PSI + K-S test → auto-retrain trigger if SEVERE\n7. Audit → SHA-256 hash chain on every action (tamper-evident ledger)",
   "cardAccentColor": "#1ED760",
   "status": "active",
